@@ -1,0 +1,49 @@
+import { redirect, type Handle } from '@sveltejs/kit';
+import { credentialCount, readSession } from '$lib/server/auth';
+import { boot } from '$lib/server/db';
+
+const PUBLIC_PAGES = new Set(['/login', '/setup', '/manifest.webmanifest']);
+
+export const handle: Handle = async ({ event, resolve }) => {
+	try {
+		boot();
+	} catch (error) {
+		console.error(error instanceof Error ? error.message : error);
+		return new Response('Pokedex is not configured', { status: 500 });
+	}
+
+	const session = readSession(event.cookies);
+	event.locals.user = session
+		? {
+				id: session.id,
+				displayName: session.displayName,
+				onboardingDone: session.onboardingDone
+			}
+		: null;
+	event.locals.sessionId = session?.sessionId ?? null;
+
+	const path = event.url.pathname;
+	if (!path.startsWith('/api/')) {
+		if (!event.locals.user) {
+			if (!PUBLIC_PAGES.has(path)) {
+				throw redirect(303, credentialCount() > 0 ? '/login' : '/setup');
+			}
+		} else if (path === '/' || path === '/login' || path === '/setup') {
+			throw redirect(303, event.locals.user.onboardingDone ? '/today' : '/onboarding');
+		} else if (!event.locals.user.onboardingDone && path !== '/onboarding' && path !== '/manifest.webmanifest') {
+			throw redirect(303, '/onboarding');
+		} else if (event.locals.user.onboardingDone && path === '/onboarding') {
+			throw redirect(303, '/today');
+		}
+	}
+
+	const response = await resolve(event);
+	response.headers.set('x-content-type-options', 'nosniff');
+	// same-origin keeps the path off cross-site requests and still sends a real
+	// Origin on same-site form posts. no-referrer forces Origin: null, which
+	// SvelteKit rejects as a cross-site form submission.
+	response.headers.set('referrer-policy', 'same-origin');
+	response.headers.set('x-frame-options', 'DENY');
+	response.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+	return response;
+};

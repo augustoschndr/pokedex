@@ -1,0 +1,302 @@
+/**
+ * Proves ingest -> screens -> decision answer -> answers endpoint.
+ * Builds must already exist (`npm run build`).
+ */
+import { spawn } from 'node:child_process';
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import http from 'node:http';
+import Database from 'better-sqlite3';
+import { generateVAPIDKeys } from 'web-push';
+
+const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const port = 3456;
+const origin = `http://127.0.0.1:${port}`;
+const token = crypto.randomBytes(24).toString('hex');
+const sessionSecret = crypto.randomBytes(24).toString('hex');
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pokedex-flow-'));
+const dbPath = path.join(dir, 'pokedex.db');
+const vapid = generateVAPIDKeys();
+const sample = JSON.parse(fs.readFileSync(path.join(root, 'docs/example-payload.json'), 'utf8'));
+
+const failures = [];
+function check(cond, message) {
+	if (!cond) {
+		failures.push(message);
+		console.error('FAIL', message);
+	}
+}
+
+function seal(id) {
+	const sig = crypto.createHmac('sha256', sessionSecret).update(id).digest('base64url');
+	return `${id}.${sig}`;
+}
+
+async function api(pathname, { method = 'GET', body, bearer, cookie } = {}) {
+	const headers = {};
+	if (body !== undefined) headers['content-type'] = 'application/json';
+	if (bearer) headers.authorization = `Bearer ${bearer}`;
+	if (cookie) headers.cookie = cookie;
+	const response = await fetch(origin + pathname, {
+		method,
+		headers,
+		body: body === undefined ? undefined : JSON.stringify(body)
+	});
+	const text = await response.text();
+	let json = null;
+	try {
+		json = JSON.parse(text);
+	} catch {
+		json = text;
+	}
+	return { status: response.status, json, text };
+}
+
+const hooks = [];
+const webhook = http.createServer((req, res) => {
+	const chunks = [];
+	req.on('data', (chunk) => chunks.push(chunk));
+	req.on('end', () => {
+		const body = Buffer.concat(chunks).toString('utf8');
+		hooks.push({ body, sig: req.headers['x-pokedex-signature'] });
+		res.writeHead(204);
+		res.end();
+	});
+});
+await new Promise((resolve) => webhook.listen(0, '127.0.0.1', resolve));
+const hookPort = webhook.address().port;
+
+const child = spawn('node', ['build'], {
+	cwd: root,
+	env: {
+		...process.env,
+		NODE_ENV: 'production',
+		PORT: String(port),
+		HOST: '127.0.0.1',
+		ORIGIN: origin,
+		DATABASE_PATH: dbPath,
+		INGEST_TOKEN: token,
+		SESSION_SECRET: sessionSecret,
+		VAPID_PUBLIC_KEY: vapid.publicKey,
+		VAPID_PRIVATE_KEY: vapid.privateKey,
+		VAPID_SUBJECT: 'mailto:augusto@folderr.co',
+		WEBAUTHN_RP_ID: '127.0.0.1',
+		WEBAUTHN_RP_NAME: 'Pokedex',
+		TZ: 'America/Sao_Paulo',
+		DECISIONS_WEBHOOK_URL: `http://127.0.0.1:${hookPort}/hook`,
+		SEED_DEMO: '0'
+	},
+	stdio: ['ignore', 'pipe', 'pipe']
+});
+let logs = '';
+child.stdout.on('data', (buf) => {
+	logs += buf.toString();
+});
+child.stderr.on('data', (buf) => {
+	logs += buf.toString();
+});
+
+async function waitHealth() {
+	for (let i = 0; i < 50; i++) {
+		try {
+			const res = await fetch(`${origin}/api/health`);
+			if (res.ok) return;
+		} catch {
+			/* starting */
+		}
+		await new Promise((r) => setTimeout(r, 100));
+	}
+	throw new Error('server did not become healthy\n' + logs);
+}
+
+try {
+	if (!fs.existsSync(path.join(root, 'build/index.js'))) {
+		throw new Error('Missing build/. Run npm run build first.');
+	}
+	await waitHealth();
+	check(/POKEDEX_SETUP_CODE=[A-Z0-9]{4}-[A-Z0-9]{4}/.test(logs), 'setup code printed once');
+	const setupCode = logs.match(/POKEDEX_SETUP_CODE=([A-Z0-9]{4}-[A-Z0-9]{4})/)?.[1];
+
+	const health = await api('/api/v1/health');
+	check(health.status === 200 && health.json.ok === true, 'health');
+
+	const denied = await api('/api/v1/ingest', { method: 'POST', bearer: 'nope', body: {} });
+	check(denied.status === 401, 'bad token is 401');
+
+	const invalid = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: { id: 'x', type: 'nope' }
+	});
+	check(invalid.status === 400 && invalid.json.error === 'invalid_payload', 'invalid payload is 400');
+
+	const created = await api('/api/v1/ingest', { method: 'POST', bearer: token, body: sample });
+	check(created.status === 200 && created.json.brief_id === sample.id && created.json.pushed === 0, 'ingest ok');
+
+	const alias = await api('/api/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: { ...sample, id: 'brief-alias', title: 'alias' }
+	});
+	check(alias.status === 200, 'unversioned ingest alias');
+
+	const db = new Database(dbPath);
+	const user = db.prepare('SELECT id FROM user LIMIT 1').get();
+	const sessionId = crypto.randomUUID();
+	const now = new Date().toISOString();
+	const exp = new Date(Date.now() + 30 * 864e5).toISOString();
+	db.prepare(
+		'INSERT INTO session (id, user_id, created_at, expires_at, last_seen_at, user_agent) VALUES (?, ?, ?, ?, ?, ?)'
+	).run(sessionId, user.id, now, exp, now, 'flow-test');
+	db.close();
+	const cookie = `pokedex_session=${seal(sessionId)}`;
+
+	const today = await api('/api/v1/today', { cookie });
+	check(today.json.today?.lesson?.includes('Origin-story'), 'today screen');
+	const week = await api('/api/v1/week', { cookie });
+	check(week.json.items?.length === 5, 'week screen has 5 shots');
+	const todos = await api('/api/v1/todos', { cookie });
+	check(todos.json.items?.some((item) => item.id === 'cf-cal' && item.done === false), 'todo open');
+	const study = await api('/api/v1/study', { cookie });
+	check(study.json.study.blocks.length === 4, 'study blocks');
+	check(study.json.reels_rules.blocks.length === 2, 'reels rules on study');
+	const decisions = await api('/api/v1/decisions', { cookie });
+	check(decisions.json.decisions?.[0]?.status === 'pending', 'decision pending');
+
+	const toggled = await api('/api/v1/todos/cf-cal/toggle', { method: 'POST', cookie });
+	check(toggled.status === 200 && toggled.json.item.done === true, 'toggle todo');
+
+	const answered = await api('/api/v1/decisions/dec-us-pricing-2026-11/answer', {
+		method: 'POST',
+		cookie,
+		body: {
+			action: 'approved',
+			comment: 'Keep US$5k–10k and sell Portal as founding-client early access.'
+		}
+	});
+	check(answered.status === 200 && answered.json.answer.action === 'approved', 'decision answer');
+	check(/-03:00$/.test(answered.json.answer.answered_at), 'answer timestamp in Sao Paulo');
+
+	const needsComment = await api('/api/v1/decisions/dec-us-pricing-2026-11/answer', {
+		method: 'POST',
+		cookie,
+		body: { action: 'commented', comment: '   ' }
+	});
+	check(needsComment.status === 400, 'empty comment rejected');
+
+	for (let i = 0; i < 30 && hooks.length === 0; i++) {
+		await new Promise((r) => setTimeout(r, 100));
+	}
+	check(hooks.length === 1, 'webhook delivered');
+	if (hooks[0]) {
+		const mac = crypto.createHmac('sha256', token).update(hooks[0].body).digest('hex');
+		check(hooks[0].sig === `sha256=${mac}`, 'webhook HMAC');
+		const payload = JSON.parse(hooks[0].body);
+		check(payload.action === 'approved' && payload.id === 'dec-us-pricing-2026-11', 'webhook body');
+	}
+
+	const answers = await api('/api/v1/decisions/answers?since=2020-01-01T00:00:00Z', { bearer: token });
+	check(answers.status === 200 && answers.json.answers.length === 1, 'answers endpoint');
+	check(answers.json.answers[0].comment.includes('founding-client'), 'answer comment returned');
+	const future = await api('/api/v1/decisions/answers?since=2999-01-01T00:00:00Z', { bearer: token });
+	check(future.json.answers.length === 0, 'since filter');
+	const aliasAnswers = await api('/api/decisions/answers', { bearer: token });
+	check(aliasAnswers.status === 200 && aliasAnswers.json.answers.length === 1, 'answers alias');
+
+	const second = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: {
+			id: sample.id,
+			type: 'daily',
+			for_date: '2026-11-23',
+			today: { lesson: 'Updated lesson title' },
+			todos: { items: [{ id: 'cf-cal', text: 'Updated cloudflare task', done: false }] },
+			decisions: [{ id: 'dec-us-pricing-2026-11', title: 'This title must not stick', detail: 'nope' }]
+		}
+	});
+	check(second.status === 200, 'second ingest');
+	const today2 = await api('/api/v1/today', { cookie });
+	check(today2.json.today.lesson === 'Updated lesson title', 'today replaced');
+	const todos2 = await api('/api/v1/todos', { cookie });
+	const cloud = todos2.json.items.find((item) => item.id === 'cf-cal');
+	check(cloud?.done === true && cloud.text === 'Updated cloudflare task', 'tick survives ingest');
+	const decisions2 = await api('/api/v1/decisions', { cookie });
+	check(
+		decisions2.json.decisions[0].title === 'Decide US website pricing',
+		'answered decision is not rewritten'
+	);
+
+	const weekOnly = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: {
+			id: 'brief-week',
+			type: 'weekly',
+			week: { intro: 'Friday plan', items: [{ id: 'one', lead: 'Fri', title: 'Only shot' }] }
+		}
+	});
+	check(weekOnly.status === 200, 'weekly kind');
+	const week2 = await api('/api/v1/week', { cookie });
+	check(week2.json.items.length === 1 && week2.json.intro === 'Friday plan', 'week replaced');
+	const studyStill = await api('/api/v1/study', { cookie });
+	check(studyStill.json.reels_rules.blocks.length === 2, 'weekly post left reels rules');
+
+	const clearReels = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: { id: 'brief-reels-clear', type: 'ad_hoc', reels_rules: { blocks: [] } }
+	});
+	check(clearReels.status === 200, 'clear reels');
+	const studyAfter = await api('/api/v1/study', { cookie });
+	check(studyAfter.json.reels_rules.blocks.length === 0, 'reels cleared');
+	check(studyAfter.json.study.blocks.length === 4, 'study kept');
+
+	const exported = await api('/api/v1/me/export', { cookie });
+	check(exported.status === 200 && exported.json.app === 'pokedex', 'export');
+	check(!exported.text.includes(token) && !exported.text.includes(vapid.privateKey), 'export has no secrets');
+	check(!exported.text.includes('public_key'), 'export has no credential key material');
+
+	const badCode = await api('/api/v1/auth/setup/verify', { method: 'POST', body: { code: 'ZZZZ-ZZZZ' } });
+	check(badCode.status === 401, 'bad setup code');
+	const goodCode = await api('/api/v1/auth/setup/verify', { method: 'POST', body: { code: setupCode } });
+	check(goodCode.status === 200, 'printed setup code works');
+
+	const removed = await api('/api/v1/me/delete', {
+		method: 'POST',
+		cookie,
+		body: { confirm: 'DELETE MY POKEDEX DATA', keep_passkey: true }
+	});
+	check(removed.status === 200, 'delete data');
+	const after = await api('/api/v1/today', { cookie });
+	check(after.status === 401, 'session cleared after delete');
+	const again = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: { id: 'after-delete', type: 'ad_hoc', today: { lesson: 'Back' } }
+	});
+	check(again.status === 200, 'ingest still works after delete');
+
+	let saw429 = false;
+	for (let i = 0; i < 12; i++) {
+		const limited = await api('/api/v1/ingest', { method: 'POST', bearer: 'nope', body: {} });
+		if (limited.status === 429) saw429 = true;
+	}
+	check(saw429, 'ingest rate limit');
+} catch (error) {
+	console.error(error);
+	failures.push(error instanceof Error ? error.message : 'threw');
+} finally {
+	child.kill('SIGTERM');
+	webhook.close();
+	await new Promise((resolve) => setTimeout(resolve, 200));
+}
+
+if (failures.length) {
+	console.error(`\n${failures.length} failure(s)`);
+	if (logs) console.error(logs.slice(-2000));
+	process.exit(1);
+}
+console.log('flow ok');

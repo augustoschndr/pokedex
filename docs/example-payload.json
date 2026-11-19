@@ -1,0 +1,182 @@
+{
+  "id": "brief-2026-11-23",
+  "type": "daily",
+  "timezone": "America/Sao_Paulo",
+  "for_date": "2026-11-23",
+  "title": "Monday brief — origin-story long-form",
+  "push": {
+    "title": "Today's lesson is ready",
+    "body": "Film the origin-story long-form, 10–12 min. Hook and talking points are in Pokedex."
+  },
+  "today": {
+    "date_label": "Monday, Nov 23, 2026",
+    "for_date": "2026-11-23",
+    "lesson": "Origin-story long-form, 10–12 min",
+    "where_it_goes": "YouTube @augustoschndr and logbook/archive",
+    "pillar": "The logbook: travel and founder origin",
+    "body": "This is the first day of the calendar. Film the origin story: a designer who built the business across 15 countries, found the world had no soul left to fire his fire, and came home to Brasília to build folders. Include the Turkey hostel beat so Tuesday's reel can be cut from this take. If logbook/archive is not live yet, the video still ships on YouTube and the post follows.",
+    "hook": "I built a business across 15 countries. Then I came home, because the world ran out of fire. This is what I'm building now.",
+    "talking_points": [
+      "I built a business across 15 countries. A hostel in Turkey, a laptop, a client site going live. That was the office.",
+      "I didn't come back to Brazil to slow down. I came back because this is where my fire still burns.",
+      "untitledfolderr.co is not an agency anymore. It's a folder of folders, and each one unfolds into an app.",
+      "A profile is rented land. A site, a list and a database are ground you own. Use the first to build the second.",
+      "Post less. Mean more. Send every view somewhere you own."
+    ],
+    "whiteboard": {
+      "caption": "Draw this at the end and hold it for a few seconds. It can also become the logbook header.",
+      "nodes": [
+        { "id": "road", "label": "15 countries", "detail": "The business, on the road", "kind": "box" },
+        { "id": "home", "label": "Brasília", "detail": "Came home for the fire", "kind": "box" },
+        { "id": "hold", "label": "untitledfolderr.co", "detail": "A folder of folders", "kind": "terminal" },
+        { "id": "f01", "label": "Folder 01", "detail": "Real estate, already a paying client", "kind": "box" }
+      ],
+      "edges": [
+        { "from": "road", "to": "home", "label": "came home" },
+        { "from": "home", "to": "hold", "label": "build" },
+        { "from": "hold", "to": "f01", "label": "first folder" }
+      ]
+    },
+    "cta": "If you want to follow the build, subscribe to logbook/archive."
+  },
+  "week": {
+    "intro": "Filming shot list for Nov 23–27, 2026. X and LinkedIn text posts are drafted by BALTHA for Wednesday approval. They are not new shoots.",
+    "items": [
+      {
+        "id": "2026-11-23-origin",
+        "lead": "Mon 23",
+        "title": "Film the origin-story long-form",
+        "detail": "YouTube + logbook/archive, 10–12 min. Include the Turkey hostel beat so Tuesday's reel can be cut from it.",
+        "meta": "Logbook",
+        "status": { "label": "Film", "tone": "warning" }
+      },
+      {
+        "id": "2026-11-24-reel",
+        "lead": "Tue 24",
+        "title": "Reel cut from the long-form",
+        "detail": "Instagram + Facebook. Hook: A hostel in Turkey, a laptop, a client site going live.",
+        "meta": "Logbook",
+        "status": { "label": "Cut" }
+      },
+      {
+        "id": "2026-11-25-approve",
+        "lead": "Wed 25",
+        "title": "No new filming — approve the batch",
+        "detail": "20 minutes. Two carousels from the existing cafe reel.",
+        "meta": "Business Engine",
+        "status": { "label": "Approve" }
+      },
+      {
+        "id": "2026-11-26-teardown",
+        "lead": "Thu 26",
+        "title": "Carousel teardown — pick a real prospect site",
+        "detail": "Instagram. You pick the site. BALTHA builds the carousel.",
+        "meta": "Design craft",
+        "status": { "label": "Pick site" }
+      },
+      {
+        "id": "2026-11-27-abrasom",
+        "lead": "Fri 27",
+        "title": "Film the Abrasom case reel",
+        "detail": "Instagram + LinkedIn. Hook: Abrasom was tired of cold real estate bureaucracy.",
+        "meta": "Proof",
+        "status": { "label": "Film", "tone": "warning" }
+      }
+    ]
+  },
+  "todos": {
+    "intro": "Owner-only or physical tasks.",
+    "items": [
+      { "id": "cf-cal", "text": "Add the Cloudflare A record for cal.folderr.co", "meta": "Type A, name cal, value 72.62.62.14, DNS only" },
+      { "id": "cal-setup", "text": "Do the Cal.com admin setup", "meta": "First visit after DNS" },
+      { "id": "esim", "text": "Buy the BR WhatsApp Business eSIM", "meta": "Vivo, Claro or TIM prepaid" },
+      { "id": "quo", "text": "Buy the US Quo number", "meta": "Calls and SMS for US prospects" },
+      { "id": "pricing", "text": "Decide US website pricing", "meta": "US$6k–12k or keep US$5k–10k" },
+      { "id": "icp", "text": "Decide the primary ICP", "meta": "Boutique luxury brokerages first" },
+      { "id": "film-week", "text": "Film this week's lessons", "meta": "Mon Nov 23 origin story, Fri Nov 27 Abrasom" },
+      { "id": "wed-batch", "text": "Wednesday approval batch", "meta": "20 min. Nothing publishes without your OK" }
+    ]
+  },
+  "study": {
+    "blocks": [
+      {
+        "id": "value-equation",
+        "heading": "Value equation",
+        "kind": "equation",
+        "equation": "Value = (Dream outcome × Perceived likelihood) / (Time delay × Effort and sacrifice)",
+        "text": "Push the top up, the bottom down."
+      },
+      {
+        "id": "grand-slam",
+        "heading": "Grand slam offer",
+        "kind": "text",
+        "text": "Make the offer hard to refuse: a named core, stacked bonuses, a guarantee, and real scarcity. Owned-Ground Launch is the example on the table: the site, Portal, hosting, and a full export anytime."
+      },
+      {
+        "id": "closer",
+        "heading": "CLOSER, on the 30-min Asset Call",
+        "kind": "steps",
+        "steps": [
+          { "title": "C — Clarify", "detail": "What made you book today?" },
+          { "title": "L — Label", "detail": "Current state versus desired state in 90 days." },
+          { "title": "O — Overview past pain", "detail": "What have they tried?" },
+          { "title": "S — Sell the vacation", "detail": "A 2-minute pitch of the outcome, not the process." },
+          { "title": "E — Explain away concerns", "detail": "Price, timing, I need to think." },
+          { "title": "R — Reinforce", "detail": "Confirm the decision, send the contract, set the kickoff." }
+        ]
+      },
+      {
+        "id": "sovereignty",
+        "heading": "Sovereignty: rented vs owned ground",
+        "kind": "diagram",
+        "lead": "The thesis",
+        "text": "Own your ground. If you can't export it, you don't own it.",
+        "diagram": {
+          "nodes": [
+            { "id": "rent", "label": "Rented", "detail": "Followers, feeds, pixels", "kind": "box" },
+            { "id": "own", "label": "Owned", "detail": "List, domain, database", "kind": "terminal" }
+          ],
+          "edges": [
+            { "from": "rent", "to": "own", "label": "use the first to build the second" }
+          ]
+        }
+      }
+    ]
+  },
+  "reels_rules": {
+    "intro": "Keep the raw single take, with the whiteboard appearing while you speak. Make it tighter with a fast hook, clean overlays, and one close.",
+    "blocks": [
+      {
+        "id": "reels-steps",
+        "heading": "Reels rules",
+        "kind": "steps",
+        "steps": [
+          { "title": "0–2 s: the payoff", "detail": "Open on the conclusion or flash the end diagram." },
+          { "title": "2–10 s: why it matters", "detail": "One line of context or a story beat." },
+          { "title": "Body: the framework", "detail": "3 steps max, one idea each, single take." },
+          { "title": "End: the diagram, 3–5 s", "detail": "Hold it on screen." },
+          { "title": "CTA: one line", "detail": "Comment a keyword or link in bio. Never two CTAs." },
+          { "title": "Before publishing", "detail": "Burned-in captions. Proofread every overlay." }
+        ]
+      },
+      {
+        "id": "reels-keep-fix",
+        "heading": "Keep and fix",
+        "kind": "rows",
+        "rows": [
+          { "lead": "Keep", "title": "Raw single take + end diagram", "detail": "Filmed wherever you are. One simple framework per reel." },
+          { "lead": "Fix", "title": "Slow openers", "detail": "Do not start with a warm-up. Lead with the payoff." },
+          { "lead": "Fix", "title": "Missing captions", "detail": "Always burn captions in. Proofread before publishing." },
+          { "lead": "Fix", "title": "No CTA", "detail": "End every reel with one CTA." }
+        ]
+      }
+    ]
+  },
+  "decisions": [
+    {
+      "id": "dec-us-pricing-2026-11",
+      "title": "Decide US website pricing",
+      "detail": "US$6k–12k or keep US$5k–10k? Sell the Portal as founding-client early access?"
+    }
+  ]
+}
