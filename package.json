@@ -1,0 +1,43 @@
+{
+  "name": "pokedex",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "node --env-file-if-exists=.env build",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "seed": "node scripts/seed.mjs",
+    "issue-setup-code": "node scripts/issue-setup-code.mjs",
+    "test:flow": "node scripts/flow-test.mjs",
+    "vapid": "node scripts/generate-vapid.mjs",
+    "screenshots": "node scripts/screenshots.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@fontsource/bricolage-grotesque": "^5.3.0",
+    "@fontsource/instrument-sans": "^5.3.0",
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.1.0",
+    "@sveltejs/adapter-node": "^5.5.8",
+    "@sveltejs/kit": "^2.70.4",
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "better-sqlite3": "^13.2.0",
+    "svelte": "^5.58.0",
+    "typescript": "^6.0.3",
+    "vite": "^6.4.6",
+    "web-push": "^4.0.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.6",
+    "@types/web-push": "^3.6.4",
+    "playwright": "^1.65.1",
+    "svelte-check": "^4.7.8"
+  }
+}
