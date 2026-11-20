@@ -139,7 +139,7 @@
 					{@const href = tool.url ? safeHttpUrl(tool.url) : null}
 					<article class="card">
 						{#if href}
-							<a class="guide-title" href={href} target="_blank" rel="noopener noreferrer">{tool.name}</a>
+							<a class="stretch guide-title" href={href} target="_blank" rel="noopener noreferrer">{tool.name}</a>
 						{:else}
 							<p class="guide-title">{tool.name}</p>
 						{/if}
@@ -176,7 +176,10 @@
 							aria-pressed={item.done}
 							aria-label={item.done ? `Mark not done: ${item.text}` : `Mark done: ${item.text}`}
 							disabled={busy === item.id}
-							onclick={() => toggleCheck(item.id)}
+							onclick={(event) => {
+								event.stopPropagation();
+								toggleCheck(item.id);
+							}}
 						>
 							<i>
 								{#if item.done}

@@ -51,7 +51,7 @@
 						{#each day.items as item}
 							<div class="shot">
 								<div class="week-top">
-									<h2><a href="/week/{item.id}">{item.title}</a></h2>
+									<h2><a class="stretch" href="/week/{item.id}">{item.title}</a></h2>
 									{#if item.status}
 										<span class="chip">
 											<span class="dot {tone(item.status.tone)}"></span>
@@ -74,7 +74,9 @@
 				<article class="card">
 					<p class="lead">No date</p>
 					{#each data.undated as item}
-						<p class="small" style="margin-top: 8px"><a class="shot-link" href="/week/{item.id}">{item.title}</a></p>
+						<div class="shot">
+							<p class="small"><a class="stretch shot-link" href="/week/{item.id}">{item.title}</a></p>
+						</div>
 					{/each}
 				</article>
 			{/if}

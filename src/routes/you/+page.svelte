@@ -41,7 +41,10 @@
 						aria-pressed={item.done}
 						aria-label={item.done ? `Mark not done: ${item.text}` : `Mark done: ${item.text}`}
 						disabled={busy === item.id}
-						onclick={() => toggle(item.id)}
+						onclick={(event) => {
+							event.stopPropagation();
+							toggle(item.id);
+						}}
 					>
 						<i>
 							{#if item.done}
@@ -51,7 +54,7 @@
 							{/if}
 						</i>
 					</button>
-					<a class="todo-copy" href="/you/{item.id}">
+					<a class="stretch todo-copy" href="/you/{item.id}">
 						<p class="todo-text">{item.text}</p>
 						{#if item.meta}<p class="small muted" style="margin-top: 4px">{item.meta}</p>{/if}
 					</a>
