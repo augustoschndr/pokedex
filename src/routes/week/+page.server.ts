@@ -1,6 +1,9 @@
-import { currentWeek } from '$lib/server/content';
+import { weekPage } from '$lib/server/screens';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
-	return locals.user ? currentWeek(locals.user.id) : { intro: '', items: [] };
+	if (!locals.user) {
+		return { today: '', dateLabel: '', intro: '', days: [], undated: [] };
+	}
+	return weekPage(locals.user.id);
 };

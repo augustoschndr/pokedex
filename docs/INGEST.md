@@ -86,6 +86,8 @@ Ids are strings of letters, numbers, and `.` `_` `:` `-`, up to 200 characters.
 
 `timezone` defaults to `America/Sao_Paulo`. `type` is `daily`, `weekly`, or `ad_hoc`. `for_date` is `YYYY-MM-DD` when present. Status `tone` is `default`, `warning`, `success`, or `info`.
 
+The phone does not treat `date_label` as the current day. It uses the real date in the server timezone. When `for_date` is still in the future, Today is a prep day and counts down to that date. Week rows are grouped by the `YYYY-MM-DD` prefix on each item id. Days with no item stay empty. No new ingest fields are required.
+
 Study blocks:
 
 | `kind` | Fields |

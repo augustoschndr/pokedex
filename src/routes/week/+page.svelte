@@ -2,6 +2,13 @@
 	import SettingsLink from '$lib/components/SettingsLink.svelte';
 
 	let { data } = $props();
+
+	function tone(tone: string | undefined) {
+		if (tone === 'warning') return 'warn';
+		if (tone === 'success') return 'ok';
+		if (tone === 'info') return 'info';
+		return '';
+	}
 </script>
 
 <svelte:head><title>This week · Pokedex</title></svelte:head>
@@ -9,32 +16,60 @@
 <main>
 	<div class="toprow">
 		<div class="titles">
-			<p class="kicker">Shot list</p>
+			<p class="kicker">{data.dateLabel || 'Shot list'}</p>
 			<h1>This week</h1>
 		</div>
 		<SettingsLink />
 	</div>
-	{#if data.intro}<p class="lede">{data.intro}</p>{/if}
-	{#if data.items.length === 0}
+	{#if data.intro}<p class="meta">{data.intro}</p>{/if}
+
+	{#if data.days.length === 0}
 		<p class="lede">No shots on the list yet.</p>
 	{:else}
-		<div class="stack" style="margin-top: 20px">
-			{#each data.items as item}
-				<article class="card">
-					<div class="week-top">
-						<span class="lead">{item.lead}</span>
-						{#if item.status}
-							<span class="chip">
-								<span class="dot {item.status.tone === 'default' ? '' : item.status.tone === 'warning' ? 'warn' : item.status.tone === 'success' ? 'ok' : 'info'}"></span>
-								{item.status.label}
-							</span>
-						{/if}
-					</div>
-					<h2 style="margin-top: 8px">{item.title}</h2>
-					{#if item.detail}<p class="meta" style="margin-top: 6px">{item.detail}</p>{/if}
-					{#if item.meta}<p class="small muted" style="margin-top: 8px">{item.meta}</p>{/if}
-				</article>
+		<div class="stack" style="margin-top: 16px">
+			{#each data.days as day (day.date)}
+				{#if day.items.length === 0}
+					<p class="day-line" class:today={day.relation === 'today'} class:past={day.relation === 'past'}>
+						<span>{day.label}</span>
+						<span class="muted">{day.relation === 'today' ? 'Today · nothing scheduled' : 'Nothing scheduled'}</span>
+					</p>
+				{:else}
+					<article
+						class="card day"
+						class:today={day.relation === 'today'}
+						class:past={day.relation === 'past'}
+						aria-current={day.relation === 'today' ? 'date' : undefined}
+					>
+						<div class="week-top">
+							<span class="lead">{day.label}</span>
+							{#if day.relation === 'today'}<span class="chip">Today</span>{/if}
+						</div>
+						{#each day.items as item}
+							<div class="shot">
+								<div class="week-top">
+									<h2>{item.title}</h2>
+									{#if item.status}
+										<span class="chip">
+											<span class="dot {tone(item.status.tone)}"></span>
+											{item.status.label}
+										</span>
+									{/if}
+								</div>
+								{#if item.detail}<p class="meta" style="margin-top: 6px">{item.detail}</p>{/if}
+								{#if item.meta}<p class="small muted" style="margin-top: 8px">{item.meta}</p>{/if}
+							</div>
+						{/each}
+					</article>
+				{/if}
 			{/each}
+			{#if data.undated.length}
+				<article class="card">
+					<p class="lead">No date</p>
+					{#each data.undated as item}
+						<p class="small" style="margin-top: 8px">{item.title}</p>
+					{/each}
+				</article>
+			{/if}
 		</div>
 	{/if}
 </main>

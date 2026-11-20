@@ -1,6 +1,7 @@
-import { currentToday } from '$lib/server/content';
+import { todayPage } from '$lib/server/screens';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
-	return { today: locals.user ? currentToday(locals.user.id) : null };
+	if (!locals.user) return { screen: null };
+	return { screen: todayPage(locals.user.id) };
 };

@@ -221,6 +221,10 @@ export function db(): Database.Database {
 		database.pragma('foreign_keys = ON');
 		database.pragma('busy_timeout = 5000');
 		database.exec(SCHEMA);
+		const columns = database.prepare('PRAGMA table_info(user)').all() as { name: string }[];
+		if (!columns.some((column) => column.name === 'theme')) {
+			database.exec("ALTER TABLE user ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'");
+		}
 	}
 	return database;
 }

@@ -1,3 +1,7 @@
+import { isIos, isStandalone } from '$lib/install';
+
+export { isStandalone };
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
 	const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
 	const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -7,15 +11,13 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 	return output;
 }
 
-export function isStandalone(): boolean {
-	return (
-		window.matchMedia('(display-mode: standalone)').matches ||
-		('standalone' in navigator &&
-			(navigator as Navigator & { standalone?: boolean }).standalone === true)
-	);
-}
-
 export async function enablePush(publicKey: string): Promise<{ ok: boolean; message: string }> {
+	if (isIos() && !isStandalone()) {
+		return {
+			ok: false,
+			message: 'Open Pokedex from the Home Screen icon. iPhone and iPad only allow notifications there.'
+		};
+	}
 	if (!publicKey) return { ok: false, message: 'Notifications are not configured on this server' };
 	if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
 		return { ok: false, message: 'This browser cannot show notifications' };

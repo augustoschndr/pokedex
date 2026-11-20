@@ -304,7 +304,9 @@ export function markAnswerNotified(userId: string, decisionId: string): void {
 
 export function exportAll(userId: string): Record<string, unknown> {
 	const user = db()
-		.prepare('SELECT id, display_name, created_at, updated_at, data_deleted_at FROM user WHERE id = ?')
+		.prepare(
+			'SELECT id, display_name, created_at, updated_at, data_deleted_at, theme FROM user WHERE id = ?'
+		)
 		.get(userId);
 	const credentials = db()
 		.prepare(
