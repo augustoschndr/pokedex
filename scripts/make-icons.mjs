@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Resvg } from '@resvg/resvg-js';
 
-const dir = path.resolve('static/icons');
+const dir = path.resolve('src/lib/brand/icons');
 fs.mkdirSync(dir, { recursive: true });
 
 /** Shared with src/lib/components/Mark.svelte. Keep the geometry identical. */

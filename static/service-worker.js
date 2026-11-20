@@ -1,4 +1,4 @@
-const CACHE = 'pokedex-v3';
+const CACHE = 'pokedex-v4';
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(self.skipWaiting());
@@ -20,10 +20,37 @@ self.addEventListener('fetch', (event) => {
 	if (url.pathname.startsWith('/api/')) return;
 	if (event.request.method !== 'GET') return;
 
+	// Icons, the manifest, and the root touch-icon probes are network-first.
+	// Installed phones were keeping the previous artwork from a cache-first
+	// copy of the unversioned icon URL.
+	const fresh =
+		url.pathname.startsWith('/icons/') ||
+		url.pathname === '/manifest.webmanifest' ||
+		url.pathname === '/apple-touch-icon.png' ||
+		url.pathname === '/apple-touch-icon-precomposed.png';
+
+	if (fresh) {
+		event.respondWith(
+			fetch(event.request)
+				.then((response) => {
+					if (response.ok) {
+						const copy = response.clone();
+						caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+					}
+					return response;
+				})
+				.catch(async () => {
+					const cached = await caches.match(event.request);
+					if (cached) return cached;
+					return Response.error();
+				})
+		);
+		return;
+	}
+
 	// Hashed build assets only. Page data and HTML stay network-first so a
 	// to-do tick or a decision answer is not stuck behind a stale cache.
-	const immutable =
-		url.pathname.startsWith('/_app/immutable/') || url.pathname.startsWith('/icons/');
+	const immutable = url.pathname.startsWith('/_app/immutable/');
 
 	if (!immutable || event.request.mode === 'navigate') {
 		event.respondWith(
@@ -60,8 +87,8 @@ self.addEventListener('push', (event) => {
 	event.waitUntil(
 		self.registration.showNotification(data.title, {
 			body: data.body,
-			icon: '/icons/icon-192.png',
-			badge: '/icons/icon-192.png',
+			icon: '/icons/icon-192-v4.png',
+			badge: '/icons/icon-192-v4.png',
 			data: { url: data.url || '/today' }
 		})
 	);

@@ -122,6 +122,55 @@ try {
 	const health = await api('/api/v1/health');
 	check(health.status === 200 && health.json.ok === true, 'health');
 
+	async function raw(pathname) {
+		const response = await fetch(origin + pathname, { redirect: 'manual' });
+		const buf = Buffer.from(await response.arrayBuffer());
+		return { status: response.status, headers: response.headers, buf };
+	}
+	function pngSize(buf) {
+		return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+	}
+	const touch = await raw('/apple-touch-icon.png');
+	const precomposed = await raw('/apple-touch-icon-precomposed.png');
+	const versionedTouch = await raw('/icons/apple-touch-icon-v4.png');
+	const oldTouch = await raw('/icons/apple-touch-icon.png');
+	const pngSig = '89504e470d0a1a0a';
+	check(touch.status === 200 && touch.headers.get('content-type')?.startsWith('image/png'), 'root touch icon is a png');
+	check(touch.headers.get('location') == null, 'root touch icon is not a redirect');
+	check(touch.buf.subarray(0, 8).toString('hex') === pngSig, 'root touch icon png signature');
+	check(pngSize(touch.buf).width === 180 && pngSize(touch.buf).height === 180, 'root touch icon is 180');
+	check(touch.headers.get('cache-control') === 'public, max-age=300, must-revalidate', 'root touch icon cache');
+	check(precomposed.status === 200 && precomposed.buf.equals(touch.buf), 'precomposed touch icon matches');
+	check(
+		precomposed.headers.get('cache-control') === 'public, max-age=300, must-revalidate',
+		'precomposed touch icon cache'
+	);
+	check(versionedTouch.status === 200 && versionedTouch.buf.equals(touch.buf), 'versioned touch icon matches');
+	check(
+		versionedTouch.headers.get('cache-control') === 'public, max-age=31536000, immutable',
+		'versioned touch icon cache'
+	);
+	check(oldTouch.status === 404, 'old touch icon path is gone');
+	check(!String(oldTouch.headers.get('location') || '').includes('login'), 'old touch icon does not redirect to login');
+	const manifestRes = await raw('/manifest.webmanifest');
+	check(manifestRes.status === 200, 'manifest is public');
+	check(manifestRes.headers.get('cache-control') === 'public, max-age=0, must-revalidate', 'manifest revalidates');
+	const manifest = JSON.parse(manifestRes.buf.toString('utf8'));
+	check(
+		manifest.icons.every((icon) => icon.src.includes('-v4.')),
+		'manifest icons are versioned'
+	);
+	check(!manifest.icons.some((icon) => icon.src === '/icons/icon-192.png'), 'manifest dropped the old icon url');
+	const login = await raw('/login');
+	const loginHtml = login.buf.toString('utf8');
+	check(login.status === 200, 'login page');
+	check(loginHtml.includes('href="/icons/apple-touch-icon-v4.png"'), 'login head links the versioned touch icon');
+	check(loginHtml.includes('sizes="180x180"'), 'touch icon declares 180');
+	check(loginHtml.includes('href="/manifest.webmanifest?v=v4"'), 'manifest link is versioned');
+	check(!loginHtml.includes('href="/icons/apple-touch-icon.png"'), 'login head dropped the old touch icon');
+	const icon192 = await raw('/icons/icon-192-v4.png');
+	check(icon192.status === 200 && pngSize(icon192.buf).width === 192, 'manifest 192 icon');
+
 	const denied = await api('/api/v1/ingest', { method: 'POST', bearer: 'nope', body: {} });
 	check(denied.status === 401, 'bad token is 401');
 
