@@ -308,9 +308,27 @@ try {
 		await assertFits(page, name);
 	}
 
+	await page.goto(origin + '/week', { waitUntil: 'networkidle' });
+	const hit = await page.evaluate(() => {
+		const meta = document.querySelector('.pane.is-active .shot .meta');
+		if (!(meta instanceof HTMLElement)) return 'missing';
+		meta.scrollIntoView({ block: 'center' });
+		const rect = meta.getBoundingClientRect();
+		const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 8);
+		const link = target instanceof Element ? target.closest('a') : null;
+		if (!link?.classList.contains('stretch')) return target instanceof Element ? target.className : 'none';
+		link.click();
+		return 'ok';
+	});
+	if (hit !== 'ok') throw new Error(`shot body is not the link (${hit})`);
+	await page.waitForURL('**/week/*');
+	const shotPath = new URL(page.url()).pathname;
+	if (!/^\/week\/.+/.test(shotPath)) throw new Error(`shot body stayed on ${shotPath}`);
+
 	await page.goto(origin + '/you', { waitUntil: 'networkidle' });
 	const you = page.locator('.pane.is-active');
 	await you.getByRole('button', { name: /Mark done: Add the Cloudflare/ }).click();
+	await page.waitForFunction(() => location.pathname === '/you');
 	await you.getByText('Add the Cloudflare').waitFor();
 	await shot(page, 'tab-you-checked');
 	await assertFits(page, 'you-checked');
@@ -437,6 +455,11 @@ try {
 	await page.getByRole('heading', { name: 'Film the origin-story long-form' }).waitFor();
 	await assertFits(page, 'task-detail');
 	await shot(page, 'task-detail');
+	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+	await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+	await shot(page, 'task-detail-dark');
+	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
+	await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
 	await assertHeaderClear(page, 'header-light', { width: 375, height: 667, top: 20, bottom: 0, scheme: 'light' });
 	await assertHeaderClear(page, 'header-dark', { width: 375, height: 667, top: 20, bottom: 0, scheme: 'dark' });
 	await assertHeaderClear(page, null, { width: 390, height: 844, top: 47, bottom: 34, scheme: 'light' });
