@@ -7,6 +7,14 @@
 	import '../app.css';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import Splash from '$lib/components/Splash.svelte';
+	import {
+		appleTouchHref,
+		faviconDarkHref,
+		faviconHref,
+		iconSvgDarkHref,
+		iconSvgHref,
+		manifestHref
+	} from '$lib/icons';
 	import { applyTheme } from '$lib/theme';
 	import { onMount } from 'svelte';
 
@@ -28,6 +36,21 @@
 		}
 	});
 </script>
+
+<svelte:head>
+	<link rel="apple-touch-icon" href={appleTouchHref} sizes="180x180" />
+	<link rel="icon" href={faviconHref} type="image/png" sizes="32x32" />
+	<link
+		rel="icon"
+		href={faviconDarkHref}
+		type="image/png"
+		sizes="32x32"
+		media="(prefers-color-scheme: dark)"
+	/>
+	<link rel="icon" href={iconSvgHref} type="image/svg+xml" />
+	<link rel="icon" href={iconSvgDarkHref} type="image/svg+xml" media="(prefers-color-scheme: dark)" />
+	<link rel="manifest" href={manifestHref} />
+</svelte:head>
 
 {#if data.showTabs}
 	<AppShell path={data.path} pending={data.pendingDecisions}>

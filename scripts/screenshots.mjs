@@ -18,6 +18,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pokedex-shots-'));
 const dbPath = path.join(dir, 'pokedex.db');
 const vapid = generateVAPIDKeys();
 const outDir = process.env.SHOT_DIR || path.join(root, 'docs/screenshots');
+const iconRev = fs.readFileSync(path.join(root, 'src/lib/icons.ts'), 'utf8').match(/ICON_REV = '([^']+)'/)?.[1];
+if (!iconRev) throw new Error('ICON_REV missing');
 fs.mkdirSync(outDir, { recursive: true });
 const sample = fs.readFileSync(path.join(root, 'docs/example-payload.json'));
 
@@ -341,8 +343,8 @@ try {
 		await shot(iconPage, name);
 		await iconPage.close();
 	}
-	await iconBoard('#FBF7F3', origin + '/icons/apple-touch-icon.png', '#171513', 'icon-light');
-	await iconBoard('#1C1916', origin + '/icons/apple-touch-icon-dark.png', '#F6F1EA', 'icon-dark');
+	await iconBoard('#FBF7F3', origin + `/icons/apple-touch-icon-${iconRev}.png`, '#171513', 'icon-light');
+	await iconBoard('#1C1916', origin + `/icons/apple-touch-icon-dark-${iconRev}.png`, '#F6F1EA', 'icon-dark');
 	await page.goto(origin + '/week', { waitUntil: 'networkidle' });
 	await page.locator('.day-line.today').waitFor();
 	await page.getByText('Nothing scheduled').first().waitFor();

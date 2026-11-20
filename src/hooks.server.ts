@@ -1,8 +1,13 @@
 import { redirect, type Handle } from '@sveltejs/kit';
+import { isPublicIconPath } from '$lib/icons';
 import { credentialCount, readSession } from '$lib/server/auth';
 import { boot } from '$lib/server/db';
 
 const PUBLIC_PAGES = new Set(['/login', '/setup', '/manifest.webmanifest']);
+
+function isPublic(path: string): boolean {
+	return PUBLIC_PAGES.has(path) || isPublicIconPath(path);
+}
 
 export const handle: Handle = async ({ event, resolve }) => {
 	try {
@@ -25,12 +30,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
 	if (!path.startsWith('/api/')) {
 		if (!event.locals.user) {
-			if (!PUBLIC_PAGES.has(path)) {
+			if (!isPublic(path)) {
 				throw redirect(303, credentialCount() > 0 ? '/login' : '/setup');
 			}
 		} else if (path === '/' || path === '/login' || path === '/setup') {
 			throw redirect(303, event.locals.user.onboardingDone ? '/today' : '/onboarding');
-		} else if (!event.locals.user.onboardingDone && path !== '/onboarding' && path !== '/manifest.webmanifest') {
+		} else if (!event.locals.user.onboardingDone && path !== '/onboarding' && !isPublic(path)) {
 			throw redirect(303, '/onboarding');
 		} else if (event.locals.user.onboardingDone && path === '/onboarding') {
 			throw redirect(303, '/today');
