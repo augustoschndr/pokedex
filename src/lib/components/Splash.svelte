@@ -32,6 +32,7 @@
 			finished = true;
 			window.clearTimeout(cap);
 			window.clearTimeout(tail);
+			stop();
 			closing = true;
 		};
 

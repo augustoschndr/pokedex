@@ -16,8 +16,9 @@
 	--display: "Bricolage Grotesque", "Instrument Sans", sans-serif;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 	--pad: 20px;
-	--tab-h: 64px;
-	--tab-gap: 8px;
+	--tab-h: 62px;
+	--tab-gap: 10px;
+	--tab-inset: 20px;
 	--sat: env(safe-area-inset-top, 0px);
 	--sab: env(safe-area-inset-bottom, 0px);
 	--tab-clear: calc(var(--tab-h) + var(--tab-gap) + 16px + var(--sab));
@@ -86,14 +87,55 @@ h1 { font-size: 32px; line-height: 1.08; }
 h2 { font-size: 20px; line-height: 1.2; }
 ul, ol { margin: 0; padding: 0; }
 
-.app-scroll {
-	min-height: 100dvh;
-	padding: calc(16px + var(--sat)) var(--pad) var(--tab-clear);
-	touch-action: pan-y;
+html:has(.app-shell),
+html:has(.app-shell) body {
+	height: 100%;
+	overflow: hidden;
+	overscroll-behavior: none;
 }
-.page-layer { position: relative; z-index: 0; }
-.page-layer.is-anim { transition: transform 280ms var(--ease); }
-.page-layer.is-dragging { user-select: none; }
+.app-shell {
+	position: fixed;
+	inset: 0;
+	overflow: clip;
+	background: var(--bg);
+	overscroll-behavior: none;
+	touch-action: manipulation;
+}
+.stage {
+	position: absolute;
+	inset: 0;
+	overflow: clip;
+	overscroll-behavior: none;
+}
+.pager {
+	position: absolute;
+	inset: 0 auto 0 0;
+	display: flex;
+	width: 100%;
+	height: 100%;
+	overflow: visible;
+}
+.pager.is-moving { will-change: transform; user-select: none; }
+.pager.is-covered { visibility: hidden; pointer-events: none; }
+.pane {
+	flex: 0 0 100%;
+	width: 100%;
+	height: 100%;
+	min-width: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	touch-action: pan-y;
+	padding: calc(16px + var(--sat)) var(--pad) var(--tab-clear);
+	-webkit-overflow-scrolling: touch;
+}
+.pane.detail {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	flex: none;
+	background: var(--bg);
+}
 
 .step, .settings {
 	min-height: 100dvh;
@@ -343,20 +385,25 @@ textarea.field { min-height: 96px; resize: vertical; }
 .error { color: var(--danger); font-size: 14px; margin-top: 8px; }
 
 .tabbar {
-	position: fixed;
+	position: absolute;
 	z-index: 40;
-	left: 0;
-	right: 0;
+	left: var(--tab-inset);
+	right: var(--tab-inset);
 	bottom: calc(var(--tab-gap) + var(--sab));
-	width: min(440px, calc(100% - 16px));
-	margin-inline: auto;
 	height: var(--tab-h);
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
-	background: var(--card);
-	border: 1.5px solid var(--ink);
-	border-radius: 24px;
-	box-shadow: var(--shadow);
+	padding: 4px;
+	background: color-mix(in srgb, var(--card) 74%, transparent);
+	border: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+	border-radius: 999px;
+	box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 42%, transparent);
+	backdrop-filter: blur(16px) saturate(1.35);
+	-webkit-backdrop-filter: blur(16px) saturate(1.35);
+	touch-action: manipulation;
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+	.tabbar { background: var(--card); }
 }
 .tabbar a {
 	position: relative;
@@ -365,13 +412,16 @@ textarea.field { min-height: 96px; resize: vertical; }
 	align-items: center;
 	justify-content: center;
 	gap: 2px;
-	min-width: 0;
+	min-width: 44px;
 	min-height: 44px;
 	text-decoration: none;
 	color: var(--muted);
-	border-radius: 18px;
+	border-radius: 999px;
 }
-.tabbar a[aria-current="page"] { color: var(--ink); }
+.tabbar a[aria-current="page"] {
+	color: var(--ink);
+	background: color-mix(in srgb, var(--ink) 10%, transparent);
+}
 .tab-label {
 	font-size: 10px;
 	line-height: 12px;
@@ -405,7 +455,7 @@ textarea.field { min-height: 96px; resize: vertical; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.page-layer.is-anim { transition: none; }
+	.pager.is-moving { will-change: auto; }
 	.splash { transition: none; }
 }
 
@@ -588,7 +638,12 @@ html[data-splash='skip'] .splash { display: none; }
 @media (min-width: 480px) {
 	body { background: #ebe4da; }
 	:root[data-theme="dark"] body { background: #100e0c; }
-	.app-scroll, .step, .settings {
+	.app-shell {
+		left: max(0px, calc(50% - 220px));
+		right: max(0px, calc(50% - 220px));
+		width: auto;
+	}
+	.step, .settings {
 		width: min(440px, 100%);
 		margin: 0 auto;
 		background: var(--bg);

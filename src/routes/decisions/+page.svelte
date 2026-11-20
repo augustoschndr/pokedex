@@ -40,8 +40,6 @@
 	}
 </script>
 
-<svelte:head><title>Decisions · Pokedex</title></svelte:head>
-
 <main>
 	<div class="toprow">
 		<div class="titles">

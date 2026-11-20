@@ -1,7 +1,10 @@
 export function canUseWebGL(): boolean {
 	try {
 		const canvas = document.createElement('canvas');
-		return Boolean(canvas.getContext('webgl', { failIfMajorPerformanceCaveat: false }));
+		const gl = canvas.getContext('webgl', { failIfMajorPerformanceCaveat: false });
+		if (!gl) return false;
+		gl.getExtension('WEBGL_lose_context')?.loseContext();
+		return true;
 	} catch {
 		return false;
 	}
@@ -88,11 +91,15 @@ export async function mountLens(canvas: HTMLCanvasElement, hold: boolean): Promi
 	window.addEventListener('resize', resize);
 
 	return () => {
+		if (stopped) return;
 		stopped = true;
 		cancelAnimationFrame(frame);
 		window.removeEventListener('resize', resize);
+		group.clear();
+		scene.clear();
 		for (const geometry of geometries) geometry.dispose();
 		material.dispose();
 		renderer.dispose();
+		renderer.forceContextLoss();
 	};
 }

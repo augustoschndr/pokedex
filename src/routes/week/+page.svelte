@@ -11,8 +11,6 @@
 	}
 </script>
 
-<svelte:head><title>This week · Pokedex</title></svelte:head>
-
 <main>
 	<div class="toprow">
 		<div class="titles">
