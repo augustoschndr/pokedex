@@ -5,7 +5,8 @@
 	import '@fontsource/instrument-sans/600.css';
 	import '@fontsource/bricolage-grotesque/600.css';
 	import '../app.css';
-	import TabBar from '$lib/components/TabBar.svelte';
+	import AppShell from '$lib/components/AppShell.svelte';
+	import Splash from '$lib/components/Splash.svelte';
 	import { applyTheme } from '$lib/theme';
 	import { onMount } from 'svelte';
 
@@ -29,10 +30,10 @@
 </script>
 
 {#if data.showTabs}
-	<div class="app-scroll">
+	<AppShell path={data.path} pending={data.pendingDecisions}>
 		{@render children()}
-	</div>
-	<TabBar path={data.path} pending={data.pendingDecisions} />
+	</AppShell>
+	<Splash />
 {:else}
 	{@render children()}
 {/if}
