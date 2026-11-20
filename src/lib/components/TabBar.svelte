@@ -13,7 +13,7 @@
 <nav class="tabbar" aria-label="Sections">
 	{#each tabs as tab}
 		<a href={tab.href} aria-current={path === tab.href || path.startsWith(`${tab.href}/`) ? 'page' : undefined}>
-			<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+			<svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 				{#if tab.icon === 'today'}
 					<circle cx="12" cy="12" r="7.25" stroke="currentColor" stroke-width="1.5" />
 					<path d="M12 8.5V12l2.5 1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
@@ -29,7 +29,7 @@
 					<path d="M6 7h12M8 12h8M10 17h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
 				{/if}
 			</svg>
-			<span class="tab-label">{tab.label}</span>
+			<span class="visually-hidden">{tab.label}</span>
 			{#if tab.href === '/decisions' && pending > 0}
 				<span class="tab-dot" aria-label="{pending} waiting"></span>
 			{/if}

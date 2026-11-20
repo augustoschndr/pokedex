@@ -16,7 +16,7 @@
 	--display: "Bricolage Grotesque", "Instrument Sans", sans-serif;
 	--ease: cubic-bezier(0.22, 1, 0.36, 1);
 	--pad: 20px;
-	--tab-h: 62px;
+	--tab-h: 54px;
 	--tab-gap: 10px;
 	--tab-inset: 20px;
 	/* With the default status bar these are 0 on an SE. A notch still reports the home indicator. */
@@ -409,33 +409,43 @@ textarea.field { min-height: 96px; resize: vertical; }
 .tabbar a {
 	position: relative;
 	display: flex;
-	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 2px;
 	min-width: 44px;
 	min-height: 44px;
+	height: 100%;
 	text-decoration: none;
 	color: var(--muted);
 	border-radius: 999px;
 }
-.tabbar a[aria-current="page"] {
-	color: var(--ink);
-	background: color-mix(in srgb, var(--ink) 10%, transparent);
-}
-.tab-label {
-	font-size: 10px;
-	line-height: 12px;
-	white-space: nowrap;
-	max-width: 100%;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	font-weight: 400;
-}
-.tabbar a[aria-current="page"] .tab-label { font-weight: 500; }
-.tab-dot {
+.tabbar a svg { display: block; position: relative; z-index: 1; }
+.tabbar a[aria-current="page"] { color: var(--ink); }
+.tabbar a[aria-current="page"]::before {
+	content: "";
 	position: absolute;
-	top: 8px;
+	left: 50%;
+	top: 50%;
+	width: min(52px, calc(100% - 4px));
+	height: 40px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--ink) 12%, transparent);
+	transform: translate(-50%, -50%);
+}
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+.tabbar a .tab-dot {
+	position: absolute;
+	z-index: 1;
+	top: calc(50% - 16px);
 	right: calc(50% - 16px);
 	width: 6px;
 	height: 6px;
