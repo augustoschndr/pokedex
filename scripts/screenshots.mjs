@@ -151,13 +151,23 @@ try {
 	});
 	if (!ingested.ok) throw new Error(await ingested.text());
 
-	const context = await browser.newContext({
+	const phone = {
 		viewport: { width: 375, height: 667 },
 		deviceScaleFactor: 2,
 		isMobile: true,
 		hasTouch: true,
 		userAgent:
 			'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'
+	};
+	const context = await browser.newContext(phone);
+	await context.addInitScript(() => {
+		const mark = () => {
+			const root = document.documentElement;
+			if (root) root.dataset.splash = 'skip';
+		};
+		mark();
+		document.addEventListener('readystatechange', mark);
+		new MutationObserver(mark).observe(document, { childList: true, subtree: true });
 	});
 	const page = await context.newPage();
 	page.setDefaultTimeout(12000);
@@ -270,6 +280,69 @@ try {
 	await page.getByText(/— in \d+ days|— tomorrow/).waitFor();
 	await shot(page, 'today-prep');
 	await assertFits(page, 'today-prep');
+
+	const barBefore = await page.locator('.tabbar').boundingBox();
+	const layerBox = await page.locator('.page-layer').boundingBox();
+	if (!barBefore || !layerBox) throw new Error('swipe targets missing');
+	await page.mouse.move(layerBox.x + layerBox.width * 0.78, 260);
+	await page.mouse.down();
+	await page.mouse.move(layerBox.x + layerBox.width * 0.22, 262, { steps: 20 });
+	const barMid = await page.locator('.tabbar').boundingBox();
+	const swipeState = await page.evaluate(() => {
+		const layer = document.querySelector('.page-layer');
+		const bar = document.querySelector('.tabbar');
+		const scroller = document.querySelector('.app-scroll');
+		return {
+			layer: layer ? getComputedStyle(layer).transform : '',
+			bar: bar ? getComputedStyle(bar).transform : '',
+			overflow: document.documentElement.scrollWidth - window.innerWidth,
+			inner: scroller ? scroller.scrollWidth - scroller.clientWidth : 0
+		};
+	});
+	if (!barMid) throw new Error('tab bar missing mid-swipe');
+	if (Math.abs(barBefore.x - barMid.x) > 1 || Math.abs(barBefore.y - barMid.y) > 1) {
+		throw new Error(`tab bar moved during swipe (${barBefore.x},${barBefore.y} -> ${barMid.x},${barMid.y})`);
+	}
+	if (swipeState.layer === 'none') throw new Error('page did not follow the swipe');
+	if (swipeState.bar !== 'none') throw new Error(`tab bar transform is ${swipeState.bar}`);
+	if (swipeState.overflow > 1 || swipeState.inner > 1) {
+		throw new Error(`swipe overflow ${swipeState.overflow}/${swipeState.inner}`);
+	}
+	await shot(page, 'tabbar-swipe');
+	await page.mouse.up();
+	await page.waitForURL('**/week');
+	const barAfter = await page.locator('.tabbar').boundingBox();
+	if (!barAfter || Math.abs(barBefore.x - barAfter.x) > 1 || Math.abs(barBefore.y - barAfter.y) > 1) {
+		throw new Error('tab bar moved after the page changed');
+	}
+
+	const splashContext = await browser.newContext(phone);
+	await splashContext.addCookies(await context.cookies());
+	const splashPage = await splashContext.newPage();
+	await splashPage.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
+	await splashPage.goto(origin + '/today?splash=1', { waitUntil: 'networkidle' });
+	await splashPage.locator('.splash[data-ready]').waitFor();
+	await splashPage.locator('canvas[data-ready]').waitFor();
+	await shot(splashPage, 'splash');
+	await splashContext.close();
+
+	async function iconBoard(bg, src, ink, name) {
+		const iconPage = await context.newPage();
+		await iconPage.setContent(
+			`<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+				html,body{margin:0;height:100%;background:${bg}}
+				body{display:grid;place-items:center;font-family:"Instrument Sans",sans-serif}
+				figure{margin:0;text-align:center}
+				img{width:60px;height:60px;border-radius:13px;display:block}
+				figcaption{margin-top:4px;font-size:11px;letter-spacing:-0.01em;color:${ink}}
+			</style><figure><img src="${src}" alt="Pokedex"><figcaption>Pokedex</figcaption></figure>`,
+			{ waitUntil: 'networkidle' }
+		);
+		await shot(iconPage, name);
+		await iconPage.close();
+	}
+	await iconBoard('#FBF7F3', origin + '/icons/apple-touch-icon.png', '#171513', 'icon-light');
+	await iconBoard('#1C1916', origin + '/icons/apple-touch-icon-dark.png', '#F6F1EA', 'icon-dark');
 	await page.goto(origin + '/week', { waitUntil: 'networkidle' });
 	await page.locator('.day-line.today').waitFor();
 	await page.getByText('Nothing scheduled').first().waitFor();
