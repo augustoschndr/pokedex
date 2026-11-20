@@ -321,6 +321,25 @@ try {
 	await shot(page, 'today-prep');
 	await assertFits(page, 'today-prep');
 	await shot(page, 'tabbar-light');
+	const tabChrome = await page.evaluate(() => {
+		const bar = document.querySelector('.tabbar');
+		const link = bar?.querySelector('a');
+		const icon = bar?.querySelector('svg');
+		const label = bar?.querySelector('.visually-hidden');
+		const current = bar?.querySelector('[aria-current="page"]');
+		return {
+			height: bar ? bar.getBoundingClientRect().height : 0,
+			link: link ? link.getBoundingClientRect().height : 0,
+			icon: icon ? icon.getBoundingClientRect().width : 0,
+			label: label ? label.getBoundingClientRect().width : 99,
+			current: current?.getAttribute('aria-current') ?? ''
+		};
+	});
+	if (tabChrome.height > 56 || tabChrome.height < 50) throw new Error(`tab bar height is ${tabChrome.height}`);
+	if (tabChrome.link < 44) throw new Error(`tab target is ${tabChrome.link}px`);
+	if (tabChrome.icon < 24 || tabChrome.icon > 28) throw new Error(`tab icon is ${tabChrome.icon}px`);
+	if (tabChrome.label > 2) throw new Error('tab label is visible');
+	if (tabChrome.current !== 'page') throw new Error('active tab is not marked');
 
 	const barBefore = await page.locator('.tabbar').boundingBox();
 	const layerBox = await page.locator('.pager').boundingBox();
