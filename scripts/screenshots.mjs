@@ -67,7 +67,51 @@ async function shot(page, name) {
 	console.log('shot', file);
 }
 
+async function assertScrollbarsHidden(page, label) {
+	const report = await page.evaluate(() => {
+		const probe = document.createElement('div');
+		probe.style.cssText =
+			'position:absolute;top:0;left:0;width:80px;height:40px;overflow:scroll;visibility:hidden';
+		const inner = document.createElement('div');
+		inner.style.cssText = 'width:200px;height:80px';
+		probe.appendChild(inner);
+		document.body.appendChild(probe);
+		const gutterX = probe.offsetWidth - probe.clientWidth;
+		const gutterY = probe.offsetHeight - probe.clientHeight;
+		const scrollbarWidth = getComputedStyle(document.documentElement).scrollbarWidth;
+		probe.remove();
+		const scrollers = [];
+		for (const el of document.querySelectorAll('body *')) {
+			const cs = getComputedStyle(el);
+			const scrollsX =
+				(cs.overflowX === 'auto' || cs.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 1;
+			const scrollsY =
+				(cs.overflowY === 'auto' || cs.overflowY === 'scroll') &&
+				el.scrollHeight > el.clientHeight + 1;
+			if (scrollsX || scrollsY) scrollers.push(el.className || el.tagName);
+		}
+		return {
+			gutterX,
+			gutterY,
+			scrollbarWidth,
+			overflowX: document.documentElement.scrollWidth - window.innerWidth,
+			scrollers
+		};
+	});
+	if (report.gutterX > 0 || report.gutterY > 0) {
+		throw new Error(`${label} scrollbar gutter is ${report.gutterX}x${report.gutterY}`);
+	}
+	if (report.scrollbarWidth !== 'none') {
+		throw new Error(`${label} scrollbar-width is ${report.scrollbarWidth}`);
+	}
+	if (report.overflowX > 1) throw new Error(`${label} overflows horizontally by ${report.overflowX}px`);
+	if (report.scrollers.length) {
+		throw new Error(`${label} has a nested scroller: ${report.scrollers.join(', ')}`);
+	}
+}
+
 async function assertStepFits(page, label) {
+	await assertScrollbarsHidden(page, label);
 	const report = await page.evaluate(() => ({
 		overflow: document.documentElement.scrollWidth - window.innerWidth,
 		extra: document.documentElement.scrollHeight - window.innerHeight
@@ -77,6 +121,7 @@ async function assertStepFits(page, label) {
 }
 
 async function assertFits(page, label) {
+	await assertScrollbarsHidden(page, label);
 	const report = await page.evaluate(() => {
 		const bar = document.querySelector('.tabbar');
 		const main = document.querySelector('main');
@@ -233,6 +278,7 @@ try {
 	await page.goto(origin + '/settings', { waitUntil: 'networkidle' });
 	await page.getByRole('radiogroup', { name: 'Theme' }).waitFor();
 	await page.getByRole('radio', { name: 'System' }).waitFor();
+	await assertScrollbarsHidden(page, 'settings-light');
 	await shot(page, 'settings-light');
 
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
@@ -247,12 +293,14 @@ try {
 		const theme = await page.evaluate(() => document.documentElement.dataset.theme);
 		if (theme !== 'dark') throw new Error(`${name} resolved theme is ${theme}`);
 		await shot(page, name);
-		if (href !== '/settings') await assertFits(page, name);
+		if (href === '/settings') await assertScrollbarsHidden(page, name);
+		else await assertFits(page, name);
 	}
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 
 	await page.goto(origin + '/settings', { waitUntil: 'networkidle' });
 	await shot(page, 'settings');
+	await assertScrollbarsHidden(page, 'settings');
 	const settingsOverflow = await page.evaluate(
 		() => document.documentElement.scrollWidth - window.innerWidth
 	);

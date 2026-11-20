@@ -42,6 +42,19 @@
 
 * { box-sizing: border-box; }
 
+/* Keep touch, wheel, and keyboard scrolling. Hide the indicator on the page and any inner row. */
+html, body, * {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+	display: none;
+	width: 0;
+	height: 0;
+}
+
 html, body {
 	margin: 0;
 	padding: 0;
@@ -331,7 +344,7 @@ textarea.field { min-height: 96px; resize: vertical; }
 	left: 50%;
 	bottom: calc(var(--tab-gap) + var(--sab));
 	transform: translateX(-50%);
-	width: min(440px, calc(100vw - 16px));
+	width: min(440px, calc(100% - 16px));
 	height: var(--tab-h);
 	display: grid;
 	grid-template-columns: repeat(5, minmax(0, 1fr));
