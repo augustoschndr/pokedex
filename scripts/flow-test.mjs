@@ -150,11 +150,44 @@ try {
 	db.prepare(
 		'INSERT INTO session (id, user_id, created_at, expires_at, last_seen_at, user_agent) VALUES (?, ?, ?, ?, ?, ?)'
 	).run(sessionId, user.id, now, exp, now, 'flow-test');
+	db.prepare('UPDATE user SET onboarding_done = 1 WHERE id = ?').run(user.id);
 	db.close();
 	const cookie = `pokedex_session=${seal(sessionId)}`;
 
 	const today = await api('/api/v1/today', { cookie });
 	check(today.json.today?.lesson?.includes('Origin-story'), 'today screen');
+	const zoneToday = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'America/Sao_Paulo',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).format(new Date());
+	const todayLabel = new Intl.DateTimeFormat('en-US', {
+		timeZone: 'America/Sao_Paulo',
+		weekday: 'long',
+		month: 'short',
+		day: 'numeric'
+	}).format(new Date());
+	const todayPage = await api('/today', { cookie });
+	check(todayPage.status === 200, 'today page');
+	check(todayPage.text.includes(todayLabel), `today page shows ${todayLabel}`);
+	if (zoneToday < '2026-11-23') {
+		check(todayPage.text.includes('Prep day'), 'prep day before the brief');
+		check(todayPage.text.includes('— in ') || todayPage.text.includes('tomorrow'), 'prep countdown');
+		check(!todayPage.text.includes('Monday, Nov 23, 2026'), 'brief date is not presented as today');
+	} else if (zoneToday === '2026-11-23') {
+		check(todayPage.text.includes('Origin-story'), 'lesson shows on its own day');
+	}
+	const weekPage = await api('/week', { cookie });
+	check(weekPage.status === 200 && weekPage.text.includes('Film the origin-story long-form'), 'week page shots');
+	check(weekPage.text.includes('Nothing scheduled'), 'week shows real days without invented shots');
+	const theme = await api('/api/v1/me/theme', { method: 'POST', cookie, body: { theme: 'dark' } });
+	check(theme.status === 200 && theme.json.theme === 'dark', 'theme saved');
+	const me = await api('/api/v1/me', { cookie });
+	check(me.json.theme === 'dark', 'theme on profile');
+	const badTheme = await api('/api/v1/me/theme', { method: 'POST', cookie, body: { theme: 'blue' } });
+	check(badTheme.status === 400, 'bad theme rejected');
+	await api('/api/v1/me/theme', { method: 'POST', cookie, body: { theme: 'system' } });
 	const week = await api('/api/v1/week', { cookie });
 	check(week.json.items?.length === 5, 'week screen has 5 shots');
 	const todos = await api('/api/v1/todos', { cookie });

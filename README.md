@@ -29,7 +29,9 @@ Open the origin from `.env` (use `http://localhost:3000` and `WEBAUTHN_RP_ID=loc
 POKEDEX_SETUP_CODE=ABCD-EFGH
 ```
 
-That code is stored only as a scrypt hash, expires in 24 hours, and works once. Enter it, create a passkey with Touch ID, then add Pokedex to the Home Screen. Notifications on iOS work only from the Home Screen app, on iOS 16.4 or newer.
+That code is stored only as a scrypt hash, expires in 24 hours, and works once. Enter it, create a passkey with Touch ID, then follow the onboarding steps. iPhone and iPad Safari have no install prompt: the screen shows Share, Add to Home Screen, and Add. Notifications are requested only from the Home Screen app, on iOS 16.4 or newer. Android and desktop use the browser install prompt when it is offered.
+
+Today and This week follow the real date in `TZ` (America/Sao_Paulo). A brief dated in the future is a prep day, not today's lesson. Settings stores Light, Dark, or System for each user.
 
 If the code scrolls off the logs, set `SETUP_CODE` and restart while no passkey exists, or run:
 

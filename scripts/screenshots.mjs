@@ -67,6 +67,15 @@ async function shot(page, name) {
 	console.log('shot', file);
 }
 
+async function assertStepFits(page, label) {
+	const report = await page.evaluate(() => ({
+		overflow: document.documentElement.scrollWidth - window.innerWidth,
+		extra: document.documentElement.scrollHeight - window.innerHeight
+	}));
+	if (report.overflow > 1) throw new Error(`${label} overflows horizontally by ${report.overflow}px`);
+	if (report.extra > 4) throw new Error(`${label} is ${report.extra}px taller than 667`);
+}
+
 async function assertFits(page, label) {
 	const report = await page.evaluate(() => {
 		const bar = document.querySelector('.tabbar');
@@ -112,7 +121,7 @@ try {
 		if (msg.type() === 'error' || msg.type() === 'warning') console.log('browser', msg.type(), msg.text());
 	});
 	page.on('pageerror', (err) => console.log('pageerror', err.message));
-	await page.emulateMedia({ reducedMotion: 'reduce' });
+	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 	const client = await context.newCDPSession(page);
 	await client.send('WebAuthn.enable');
 	await client.send('WebAuthn.addVirtualAuthenticator', {
@@ -138,12 +147,59 @@ try {
 	await shot(page, 'onboarding-passkey');
 	await page.getByRole('button', { name: 'Create passkey' }).click();
 	await page.waitForURL('**/onboarding**');
-	await shot(page, 'onboarding-notifications');
-	await page.getByRole('link', { name: 'Not now' }).click();
-	await page.waitForURL('**/onboarding?step=home');
+	await page.getByRole('heading', { name: 'Add to Home Screen', exact: true }).waitFor();
+	await page.getByText('Edit Actions').waitFor();
+	await page.getByText('bottom toolbar').waitFor();
+	const installish = await page.getByRole('button', { name: /install|allow|add to home screen/i }).count();
+	if (installish) throw new Error('iOS onboarding shows a button that claims to install');
+	await assertStepFits(page, 'ios-safari');
+	await shot(page, 'onboarding-ios-safari');
 	await shot(page, 'onboarding-home');
-	await page.getByRole('button', { name: 'I added it' }).click();
-	await page.waitForURL('**/today');
+
+	const cookies = await context.cookies();
+	const standalone = await browser.newContext({
+		viewport: { width: 375, height: 667 },
+		deviceScaleFactor: 2,
+		isMobile: true,
+		hasTouch: true,
+		userAgent:
+			'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'
+	});
+	await standalone.addCookies(cookies);
+	await standalone.addInitScript(() => {
+		Object.defineProperty(window.navigator, 'standalone', { configurable: true, get: () => true });
+		const original = window.matchMedia.bind(window);
+		window.matchMedia = (query) => {
+			if (query === '(display-mode: standalone)') {
+				return {
+					matches: true,
+					media: query,
+					onchange: null,
+					addListener() {},
+					removeListener() {},
+					addEventListener() {},
+					removeEventListener() {},
+					dispatchEvent() {
+						return false;
+					}
+				};
+			}
+			return original(query);
+		};
+	});
+	const home = await standalone.newPage();
+	home.setDefaultTimeout(12000);
+	await home.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
+	await home.goto(origin + '/onboarding', { waitUntil: 'networkidle' });
+	await home.getByRole('heading', { name: 'Notes, not noise' }).waitFor();
+	await home.getByText('Home Screen app').waitFor();
+	await assertStepFits(home, 'notifications');
+	await shot(home, 'onboarding-notifications');
+	await home.getByRole('button', { name: 'Not now' }).click();
+	await home.waitForURL('**/today');
+	await standalone.close();
+
+	await page.goto(origin + '/today', { waitUntil: 'networkidle' });
 
 	const tabs = [
 		['tab-today', '/today'],
@@ -163,6 +219,37 @@ try {
 	await page.getByText('Add the Cloudflare').waitFor();
 	await shot(page, 'tab-you-checked');
 	await assertFits(page, 'you-checked');
+
+	await page.goto(origin + '/today', { waitUntil: 'networkidle' });
+	await page.getByRole('heading', { name: 'Prep day' }).waitFor();
+	await page.getByText(/— in \d+ days|— tomorrow/).waitFor();
+	await shot(page, 'today-prep');
+	await assertFits(page, 'today-prep');
+	await page.goto(origin + '/week', { waitUntil: 'networkidle' });
+	await page.locator('.day-line.today').waitFor();
+	await page.getByText('Nothing scheduled').first().waitFor();
+	await shot(page, 'week-calendar');
+	await assertFits(page, 'week-calendar');
+	await page.goto(origin + '/settings', { waitUntil: 'networkidle' });
+	await page.getByRole('radiogroup', { name: 'Theme' }).waitFor();
+	await page.getByRole('radio', { name: 'System' }).waitFor();
+	await shot(page, 'settings-light');
+
+	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+	const darkShots = [
+		['today-prep-dark', '/today', 'Prep day'],
+		['week-calendar-dark', '/week', 'This week'],
+		['settings-dark', '/settings', 'Settings']
+	];
+	for (const [name, href, heading] of darkShots) {
+		await page.goto(origin + href, { waitUntil: 'networkidle' });
+		await page.getByRole('heading', { name: heading, exact: true }).waitFor();
+		const theme = await page.evaluate(() => document.documentElement.dataset.theme);
+		if (theme !== 'dark') throw new Error(`${name} resolved theme is ${theme}`);
+		await shot(page, name);
+		if (href !== '/settings') await assertFits(page, name);
+	}
+	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 
 	await page.goto(origin + '/settings', { waitUntil: 'networkidle' });
 	await shot(page, 'settings');

@@ -3,20 +3,84 @@
 	import SettingsLink from '$lib/components/SettingsLink.svelte';
 
 	let { data } = $props();
-	const today = $derived(data.today);
+	const screen = $derived(data.screen);
+	const today = $derived(screen?.lesson ?? null);
 </script>
 
 <svelte:head><title>Today · Pokedex</title></svelte:head>
 
 <main>
 	<div class="toprow">
-		<p class="kicker">{today?.date_label ?? 'Today'}</p>
+		<p class="kicker">{screen?.dateLabel ?? 'Today'}</p>
 		<SettingsLink />
 	</div>
-	{#if !today}
+
+	{#if !screen || screen.mode === 'empty'}
 		<h1>No lesson yet</h1>
 		<p class="lede">The weekday brief shows up here when it is posted.</p>
-	{:else}
+	{:else if screen.mode === 'prep'}
+		<h1>Prep day</h1>
+		<p class="lede">Nothing to film today. The next brief is on its way.</p>
+		<article class="card" style="margin-top: 16px">
+			<p class="kicker">Next brief</p>
+			<p class="countdown">{screen.countdown}</p>
+			{#if screen.upcomingTitle}<p class="meta" style="margin-top: 6px">{screen.upcomingTitle}</p>{/if}
+		</article>
+		<section class="section" style="margin-top: 22px">
+			<h2>Start now</h2>
+			<div class="stack" style="margin-top: 12px">
+				{#if screen.shots.length}
+					<a class="card prep-link" href="/week">
+						<p class="guide-title">Upcoming shots</p>
+						{#each screen.shots as shot}
+							<p class="small" style="margin-top: 8px"><span class="lead">{shot.lead}</span> {shot.title}</p>
+						{/each}
+					</a>
+				{/if}
+				{#if screen.todoCount}
+					<a class="card prep-link" href="/you">
+						<p class="guide-title">Only you</p>
+						{#each screen.todos as item}
+							<p class="small" style="margin-top: 8px">{item.text}</p>
+						{/each}
+						{#if screen.todoCount > screen.todos.length}
+							<p class="small muted" style="margin-top: 8px">{screen.todoCount - screen.todos.length} more</p>
+						{/if}
+					</a>
+				{/if}
+				{#if screen.studyCount}
+					<a class="card prep-link" href="/study">
+						<p class="guide-title">Study</p>
+						<p class="small" style="margin-top: 8px">
+							{screen.studyHeading ?? 'Notes'} · {screen.studyCount} {screen.studyCount === 1 ? 'note' : 'notes'}
+						</p>
+					</a>
+				{/if}
+			</div>
+		</section>
+	{:else if screen.mode === 'past'}
+		<h1>No brief today</h1>
+		<p class="lede">The last one was {screen.pastLabel}. Nothing new has been posted for today.</p>
+		{#if screen.todoCount || screen.studyCount}
+			<section class="section" style="margin-top: 22px">
+				<h2>Still open</h2>
+				<div class="stack" style="margin-top: 12px">
+					{#if screen.todoCount}
+						<a class="card prep-link" href="/you">
+							<p class="guide-title">Only you</p>
+							<p class="small" style="margin-top: 8px">{screen.todoCount} still open</p>
+						</a>
+					{/if}
+					{#if screen.studyCount}
+						<a class="card prep-link" href="/study">
+							<p class="guide-title">Study</p>
+							<p class="small" style="margin-top: 8px">{screen.studyHeading ?? 'Notes'}</p>
+						</a>
+					{/if}
+				</div>
+			</section>
+		{/if}
+	{:else if today}
 		<h1>{today.lesson ?? 'Today'}</h1>
 		<svg class="underline" viewBox="0 0 72 8" aria-hidden="true">
 			<path d="M2 5 C 16 2, 28 7, 40 4 S 60 2, 70 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
@@ -31,8 +95,8 @@
 			{#if today.hook}
 				<article class="card fold">
 					<svg class="dogear" viewBox="0 0 28 28" aria-hidden="true">
-						<path d="M0 0h28L0 28z" fill="#fbf7f3" />
-						<path d="M0 0h28L0 28" fill="none" stroke="#171513" stroke-width="1.5" />
+						<path d="M0 0h28L0 28z" fill="var(--bg)" />
+						<path d="M0 0h28L0 28" fill="none" stroke="currentColor" stroke-width="1.5" />
 					</svg>
 					<h2>Hook</h2>
 					<p style="margin-top: 8px">{today.hook}</p>
