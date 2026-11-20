@@ -77,20 +77,45 @@ self.addEventListener('fetch', (event) => {
 	);
 });
 
-self.addEventListener('push', (event) => {
-	let data = { title: 'Pokedex', body: 'A new brief is ready', url: '/today' };
+function notificationFrom(event) {
+	const notice = { title: 'Pokedex', body: 'A new brief is ready', url: '/today' };
+	if (!event.data) return notice;
 	try {
-		if (event.data) data = { ...data, ...event.data.json() };
+		const parsed = event.data.json();
+		if (parsed && typeof parsed === 'object') {
+			if (typeof parsed.title === 'string' && parsed.title.trim()) notice.title = parsed.title.trim().slice(0, 120);
+			if (typeof parsed.body === 'string') notice.body = parsed.body.slice(0, 240);
+			if (typeof parsed.url === 'string' && parsed.url.startsWith('/') && !parsed.url.startsWith('//')) {
+				notice.url = parsed.url;
+			}
+		}
 	} catch {
-		data.body = event.data ? event.data.text() : data.body;
+		try {
+			const text = event.data.text();
+			if (text) notice.body = text.slice(0, 180);
+		} catch {
+			/* keep the fallback and still show it */
+		}
 	}
+	return notice;
+}
+
+self.addEventListener('push', (event) => {
+	const notice = notificationFrom(event);
+	// iOS revokes the subscription when a push arrives and this is not called.
 	event.waitUntil(
-		self.registration.showNotification(data.title, {
-			body: data.body,
-			icon: '/icons/icon-192-v4.png',
-			badge: '/icons/icon-192-v4.png',
-			data: { url: data.url || '/today' }
-		})
+		self.registration
+			.showNotification(notice.title, {
+				body: notice.body,
+				icon: '/icons/icon-192-v4.png',
+				data: { url: notice.url }
+			})
+			.catch(() =>
+				self.registration.showNotification(notice.title, {
+					body: notice.body,
+					data: { url: notice.url }
+				})
+			)
 	);
 });
 

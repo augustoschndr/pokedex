@@ -19,6 +19,7 @@
 	--tab-h: 62px;
 	--tab-gap: 10px;
 	--tab-inset: 20px;
+	/* With the default status bar these are 0 on an SE. A notch still reports the home indicator. */
 	--sat: env(safe-area-inset-top, 0px);
 	--sab: env(safe-area-inset-bottom, 0px);
 	--tab-clear: calc(var(--tab-h) + var(--tab-gap) + 16px + var(--sab));

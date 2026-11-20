@@ -145,6 +145,41 @@ async function assertFits(page, label) {
 	}
 }
 
+async function assertHeaderClear(page, name, { width, height, top, bottom, scheme }) {
+	await page.setViewportSize({ width, height });
+	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: scheme });
+	await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, scheme);
+	await page.evaluate(({ top, bottom }) => {
+		const root = document.documentElement;
+		root.style.setProperty('--sat', `${top}px`);
+		root.style.setProperty('--sab', `${bottom}px`);
+	}, { top, bottom });
+	const box = await page.evaluate(() => {
+		const button = document.querySelector('.pane.detail .icon-btn');
+		const kicker = document.querySelector('.pane.detail .kicker');
+		const bar = document.querySelector('.tabbar');
+		const shell = document.querySelector('.app-shell');
+		return {
+			buttonTop: button ? button.getBoundingClientRect().top : -1,
+			kickerTop: kicker ? kicker.getBoundingClientRect().top : -1,
+			barGap: bar ? window.innerHeight - bar.getBoundingClientRect().bottom : -1,
+			shellTop: shell ? shell.getBoundingClientRect().top : -1,
+			shellBottom: shell ? shell.getBoundingClientRect().bottom : -1,
+			innerHeight: window.innerHeight
+		};
+	});
+	const label = name || `${width}x${height}`;
+	if (box.buttonTop < top + 12) throw new Error(`${label} back button starts at ${box.buttonTop}, inset is ${top}`);
+	if (box.kickerTop < top) throw new Error(`${label} eyebrow starts at ${box.kickerTop}, inset is ${top}`);
+	if (Math.abs(box.shellTop) > 1 || Math.abs(box.shellBottom - box.innerHeight) > 1) {
+		throw new Error(`${label} shell does not fill the screen (${box.shellTop}..${box.shellBottom} of ${box.innerHeight})`);
+	}
+	if (Math.abs(box.barGap - (10 + bottom)) > 2) {
+		throw new Error(`${label} tab bar gap is ${box.barGap}, expected ${10 + bottom}`);
+	}
+	if (name) await shot(page, name);
+}
+
 const browser = await chromium.launch({ headless: true });
 try {
 	await waitHealth();
@@ -383,6 +418,14 @@ try {
 	await page.getByRole('heading', { name: 'Film the origin-story long-form' }).waitFor();
 	await assertFits(page, 'task-detail');
 	await shot(page, 'task-detail');
+	await assertHeaderClear(page, 'header-light', { width: 375, height: 667, top: 20, bottom: 0, scheme: 'light' });
+	await assertHeaderClear(page, 'header-dark', { width: 375, height: 667, top: 20, bottom: 0, scheme: 'dark' });
+	await assertHeaderClear(page, null, { width: 390, height: 844, top: 47, bottom: 34, scheme: 'light' });
+	await page.setViewportSize({ width: 375, height: 667 });
+	await page.evaluate(() => {
+		document.documentElement.style.removeProperty('--sat');
+		document.documentElement.style.removeProperty('--sab');
+	});
 	await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
 	await page.getByRole('button', { name: 'Read the script' }).click();
 	await page.locator('.prompter-text').waitFor();

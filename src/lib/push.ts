@@ -2,6 +2,10 @@ import { isIos, isStandalone } from '$lib/install';
 
 export { isStandalone };
 
+const ENDPOINT_KEY = 'pokedex-push-endpoint';
+
+export type PushDeviceState = 'on' | 'off' | 'denied' | 'unsupported' | 'needs-home' | 'error';
+
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
 	const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
 	const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -27,13 +31,56 @@ export async function enablePush(publicKey: string): Promise<{ ok: boolean; mess
 	const registration = await navigator.serviceWorker.ready;
 	const subscription = await registration.pushManager.subscribe({
 		userVisibleOnly: true,
-		applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource
+		applicationServerKey: applicationServerKey(publicKey)
 	});
+	const saved = await postSubscription(subscription);
+	if (!saved) return { ok: false, message: 'Could not save this device' };
+	return { ok: true, message: 'Notifications are on' };
+}
+
+function applicationServerKey(publicKey: string): BufferSource {
+	return urlBase64ToUint8Array(publicKey) as BufferSource;
+}
+
+async function postSubscription(subscription: PushSubscription): Promise<boolean> {
 	const response = await fetch('/api/v1/push/subscribe', {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
 		body: JSON.stringify(subscription)
 	});
-	if (!response.ok) return { ok: false, message: 'Could not save this device' };
-	return { ok: true, message: 'Notifications are on' };
+	if (!response.ok) return false;
+	try {
+		localStorage.setItem(ENDPOINT_KEY, subscription.endpoint);
+	} catch {
+		/* private mode */
+	}
+	return true;
+}
+
+/**
+ * Keep the server row aligned with this device. A service worker update can
+ * rotate the endpoint, and a 404/410 prune deletes the row while the browser
+ * still holds the old one, so every open re-posts the current subscription.
+ */
+export async function ensurePushSubscription(publicKey: string): Promise<PushDeviceState> {
+	if (isIos() && !isStandalone()) return 'needs-home';
+	if (!publicKey || !('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+		return 'unsupported';
+	}
+	if (Notification.permission === 'denied') return 'denied';
+	if (Notification.permission !== 'granted') return 'off';
+	try {
+		const registration = await navigator.serviceWorker.ready;
+		let subscription = await registration.pushManager.getSubscription();
+		if (!subscription) {
+			subscription = await registration.pushManager.subscribe({
+				userVisibleOnly: true,
+				applicationServerKey: applicationServerKey(publicKey)
+			});
+		}
+		const saved = await postSubscription(subscription);
+		return saved ? 'on' : 'error';
+	} catch {
+		return 'error';
+	}
 }
