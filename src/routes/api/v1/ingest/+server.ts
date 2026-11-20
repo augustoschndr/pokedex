@@ -40,7 +40,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		);
 	}
 	const briefId = applyIngest(principal.id, parsed.data);
-	const pushed = await pushToUser(principal.id, pushTarget(parsed.data));
+	const pushed = (await pushToUser(principal.id, pushTarget(parsed.data))).sent;
 	markPushed(principal.id, briefId);
 	console.log(`ingest brief=${briefId} type=${parsed.data.type} pushed=${pushed}`);
 	return json({ ok: true, brief_id: briefId, pushed });

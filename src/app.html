@@ -8,7 +8,13 @@
 		<script src="/theme.js"></script>
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="mobile-web-app-capable" content="yes" />
-		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<!--
+			default, not black-translucent. That style draws under the status bar
+			but sizes the layout viewport one status-bar height short, anchored at
+			the top, so the header sits in the bar and a dead band is left at the
+			bottom. iOS reads this when the Home Screen icon is added.
+		-->
+		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 		<meta name="apple-mobile-web-app-title" content="Pokedex" />
 		<title>Pokedex</title>
 		%sveltekit.head%

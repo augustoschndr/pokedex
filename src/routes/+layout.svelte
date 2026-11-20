@@ -19,6 +19,7 @@
 	} from '$lib/icons';
 	import { page } from '$app/state';
 	import { showsTabs } from '$lib/tabs';
+	import { ensurePushSubscription } from '$lib/push';
 	import { applyTheme } from '$lib/theme';
 	import { onMount } from 'svelte';
 
@@ -37,9 +38,13 @@
 	});
 
 	onMount(() => {
-		if ('serviceWorker' in navigator) {
-			navigator.serviceWorker.register('/service-worker.js').catch(() => {});
-		}
+		if (!('serviceWorker' in navigator)) return;
+		const registered = navigator.serviceWorker.register('/service-worker.js').catch(() => undefined);
+		if (!data.user || !data.vapidPublicKey) return;
+		const sync = () => ensurePushSubscription(data.vapidPublicKey);
+		void registered.then(() => sync());
+		navigator.serviceWorker.addEventListener('controllerchange', sync);
+		return () => navigator.serviceWorker.removeEventListener('controllerchange', sync);
 	});
 </script>
 

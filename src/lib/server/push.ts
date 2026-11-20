@@ -1,6 +1,7 @@
-import { sendNotification, setVapidDetails } from 'web-push';
+import { sendNotification, setVapidDetails, WebPushError } from 'web-push';
 import { randomId } from './crypto';
 import { db } from './db';
+import { outcomeFromStatus, validVapidSubject } from './push-status';
 import { nowIso } from './time';
 import type { IngestPayload } from './schema';
 
@@ -18,38 +19,68 @@ export function pushTarget(payload: IngestPayload): { title: string; body: strin
 	};
 }
 
+export type PushResult = { id: string; status: number; reason?: string };
+
+export type PushReport = { sent: number; results: PushResult[]; error?: 'not_configured' | 'invalid_vapid_subject' };
+
+function pushReason(body: string): string | undefined {
+	try {
+		const parsed = JSON.parse(body) as { reason?: unknown };
+		if (typeof parsed.reason === 'string' && /^[A-Za-z0-9._-]{1,80}$/.test(parsed.reason)) return parsed.reason;
+	} catch {
+		/* the body is not a short reason */
+	}
+	return undefined;
+}
+
+function logPush(status: number, reason?: string): void {
+	const line = reason ? `push status=${status} reason=${reason}` : `push status=${status}`;
+	if (status >= 200 && status < 300) console.log(line);
+	else console.error(line);
+}
+
 export async function pushToUser(
 	userId: string,
 	payload: { title: string; body: string; url: string }
-): Promise<number> {
+): Promise<PushReport> {
 	const publicKey = process.env.VAPID_PUBLIC_KEY;
 	const privateKey = process.env.VAPID_PRIVATE_KEY;
-	const subject = process.env.VAPID_SUBJECT || 'mailto:augusto@folderr.co';
-	if (!publicKey || !privateKey) return 0;
+	if (!publicKey || !privateKey) return { sent: 0, results: [], error: 'not_configured' };
+	const subject = (process.env.VAPID_SUBJECT || 'mailto:augusto@folderr.co').trim();
+	if (!validVapidSubject(subject)) {
+		logPush(0, 'invalid_subject');
+		return { sent: 0, results: [], error: 'invalid_vapid_subject' };
+	}
 	setVapidDetails(subject, publicKey, privateKey);
 	const rows = db()
 		.prepare('SELECT id, endpoint, p256dh, auth FROM push_subscription WHERE user_id = ?')
 		.all(userId) as { id: string; endpoint: string; p256dh: string; auth: string }[];
-	let sent = 0;
 	const body = JSON.stringify(payload);
+	const results: PushResult[] = [];
+	let sent = 0;
 	for (const row of rows) {
+		let status = 0;
+		let reason: string | undefined;
 		try {
-			await sendNotification(
+			const response = await sendNotification(
 				{ endpoint: row.endpoint, keys: { p256dh: row.p256dh, auth: row.auth } },
 				body,
-				{ TTL: 86400 }
+				{ TTL: 86400, urgency: 'high' }
 			);
-			sent += 1;
+			status = response.statusCode;
 		} catch (error) {
-			const status = (error as { statusCode?: number }).statusCode;
-			if (status === 404 || status === 410) {
-				db().prepare('DELETE FROM push_subscription WHERE id = ?').run(row.id);
-			} else {
-				console.error('push failed', status ?? 'error');
+			if (error instanceof WebPushError) {
+				status = error.statusCode;
+				reason = pushReason(error.body);
 			}
 		}
+		const outcome = outcomeFromStatus(status);
+		logPush(status, reason);
+		if (outcome.drop) db().prepare('DELETE FROM push_subscription WHERE id = ?').run(row.id);
+		if (outcome.ok) sent += 1;
+		results.push(reason ? { id: row.id, status, reason } : { id: row.id, status });
 	}
-	return sent;
+	return { sent, results };
 }
 
 export function saveSubscription(

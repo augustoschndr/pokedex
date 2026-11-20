@@ -184,6 +184,15 @@ try {
 	const created = await api('/api/v1/ingest', { method: 'POST', bearer: token, body: sample });
 	check(created.status === 200 && created.json.brief_id === sample.id && created.json.pushed === 0, 'ingest ok');
 
+	const pushDenied = await api('/api/v1/push/test', { method: 'POST' });
+	check(pushDenied.status === 401, 'push test without a token is 401');
+	const pushTest = await api('/api/v1/push/test', { method: 'POST', bearer: token });
+	check(
+		pushTest.status === 200 && pushTest.json.pushed === 0 && Array.isArray(pushTest.json.results) && pushTest.json.results.length === 0,
+		'push test with no devices'
+	);
+	check(!pushTest.text.includes('p256dh') && !pushTest.text.includes(vapid.privateKey), 'push test leaks no keys');
+
 	const alias = await api('/api/ingest', {
 		method: 'POST',
 		bearer: token,
@@ -202,6 +211,9 @@ try {
 	db.prepare('UPDATE user SET onboarding_done = 1 WHERE id = ?').run(user.id);
 	db.close();
 	const cookie = `pokedex_session=${seal(sessionId)}`;
+
+	const pushSession = await api('/api/v1/push/test', { method: 'POST', cookie });
+	check(pushSession.status === 200 && pushSession.json.pushed === 0, 'signed-in push test');
 
 	const today = await api('/api/v1/today', { cookie });
 	check(today.json.today?.lesson?.includes('Origin-story'), 'today screen');
@@ -445,6 +457,7 @@ try {
 		if (limited.status === 429) saw429 = true;
 	}
 	check(saw429, 'ingest rate limit');
+	check(!logs.includes(vapid.privateKey) && !logs.includes(token), 'logs have no secrets');
 } catch (error) {
 	console.error(error);
 	failures.push(error instanceof Error ? error.message : 'threw');

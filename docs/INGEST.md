@@ -22,7 +22,17 @@ The same handlers also live at `/api/ingest`, `/api/decisions/answers`, and `/ap
 | Weekly plan | `weekly` | Friday 16:00 America/Sao_Paulo |
 | Anything else | `ad_hoc` | Whenever |
 
-The app does not run that clock. BALTHA does, and posts the result. Each successful post sends a Web Push to Augusto's phones. The response is `{ "ok": true, "brief_id": "<id>", "pushed": <n> }`.
+The app does not run that clock. BALTHA does, and posts the result. Each successful post sends a Web Push to Augusto's phones. The response is `{ "ok": true, "brief_id": "<id>", "pushed": <n> }`. `pushed` counts push-service responses in the 200 range only. A dead subscription (404 or 410) is deleted and is not counted.
+
+## Test a push
+
+`POST /api/v1/push/test` with the same `Authorization: Bearer <INGEST_TOKEN>`. No body. It sends “Test notification” to every saved device and returns the push-service status for each one:
+
+```json
+{ "ok": true, "pushed": 1, "results": [{ "id": "<subscription id>", "status": 201 }] }
+```
+
+`201` means the push service accepted it. `403` with `reason: "BadJwtToken"` is a bad VAPID subject. `404` and `410` mean that device was dropped and the row is now deleted. `413` is a payload the service refused. The same path from the signed-in Settings screen is the “Send test notification” button. Status codes are logged as `push status=<n>`. Endpoints, keys, and the token are not logged.
 
 ## Idempotency
 
