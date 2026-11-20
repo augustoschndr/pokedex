@@ -105,6 +105,7 @@
 		let locked: 'x' | 'y' | null = null;
 		let active = false;
 		let suppressClick = false;
+		let edgeBack = false;
 
 		const skipTarget = (target: EventTarget | null) =>
 			target instanceof Element &&
@@ -120,6 +121,7 @@
 			rawX = 0;
 			locked = null;
 			active = true;
+			edgeBack = false;
 		}
 
 		function onMove(event: PointerEvent) {
@@ -133,8 +135,16 @@
 					active = false;
 					return;
 				}
+				if (!isTab(pathNow)) {
+					if (startX <= 32 && dx >= 72) edgeBack = true;
+					return;
+				}
 				scrollEl.setPointerCapture(event.pointerId);
 				dragging = true;
+			}
+			if (!isTab(pathNow)) {
+				if (startX <= 32 && dx >= 72) edgeBack = true;
+				return;
 			}
 			if (locked !== 'x') return;
 			event.preventDefault();
@@ -151,10 +161,16 @@
 		async function finish(event: PointerEvent, cancel: boolean) {
 			if (!scrollEl || !active || event.pointerId !== pointerId) return;
 			const wasX = locked === 'x';
+			const goBack = edgeBack && !cancel;
 			active = false;
 			locked = null;
 			dragging = false;
-			if (!wasX) return;
+			edgeBack = false;
+			if (goBack) {
+				history.back();
+				return;
+			}
+			if (!wasX || !isTab(pathNow)) return;
 			suppressClick = true;
 			window.setTimeout(() => {
 				suppressClick = false;

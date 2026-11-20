@@ -68,6 +68,81 @@ const blockGroupSchema = z.object({
 	blocks: z.array(studyBlockSchema).max(80)
 });
 
+const httpUrl = z
+	.string()
+	.max(2000)
+	.refine((value) => {
+		try {
+			const url = new URL(value);
+			return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password;
+		} catch {
+			return false;
+		}
+	}, 'use an http or https url');
+
+const stepSchema = z.object({
+	title: text,
+	detail: text.optional()
+});
+
+export const guideSchema = z.object({
+	summary: text.optional(),
+	why: text.optional(),
+	duration: z.string().max(80).optional(),
+	steps: z.array(stepSchema).max(40).optional(),
+	script: text.optional(),
+	cut: z.array(stepSchema).max(40).optional(),
+	tools: z
+		.array(
+			z.object({
+				name: z.string().min(1).max(200),
+				url: httpUrl.optional(),
+				note: text.optional()
+			})
+		)
+		.max(20)
+		.optional(),
+	links: z
+		.array(
+			z.object({
+				label: z.string().min(1).max(200),
+				url: httpUrl
+			})
+		)
+		.max(20)
+		.optional(),
+	checklist: z
+		.array(
+			z.object({
+				id: id,
+				text: text,
+				done: z.boolean().optional(),
+				force_status: z.boolean().optional()
+			})
+		)
+		.max(40)
+		.optional(),
+	plan_ref: id.optional()
+});
+
+const milestoneSchema = z.object({
+	id: id,
+	title: text,
+	detail: text.optional()
+});
+
+const phaseSchema = z.object({
+	id: id,
+	title: text,
+	detail: text.optional(),
+	order: z.number().int().min(0).max(10000),
+	milestones: z.array(milestoneSchema).max(40).default([])
+});
+
+export const planSchema = z.object({
+	phases: z.array(phaseSchema).max(40)
+});
+
 export const ingestSchema = z.object({
 	id: id,
 	type: z.enum(['daily', 'weekly', 'ad_hoc']),
@@ -116,7 +191,8 @@ export const ingestSchema = z.object({
 								label: z.string().min(1).max(80),
 								tone: z.enum(['default', 'warning', 'success', 'info']).optional()
 							})
-							.optional()
+							.optional(),
+						guide: guideSchema.optional()
 					})
 				)
 				.max(100)
@@ -133,12 +209,14 @@ export const ingestSchema = z.object({
 						meta: text.optional(),
 						done: z.boolean().optional(),
 						force_status: z.boolean().optional(),
-						archived: z.boolean().optional()
+						archived: z.boolean().optional(),
+						guide: guideSchema.optional()
 					})
 				)
 				.max(200)
 		})
 		.optional(),
+	plan: planSchema.optional(),
 	study: blockGroupSchema.optional(),
 	reels_rules: blockGroupSchema.optional(),
 	decisions: z
@@ -151,6 +229,29 @@ export const ingestSchema = z.object({
 		)
 		.max(50)
 		.optional()
+}).superRefine((payload, ctx) => {
+	if (!payload.plan) return;
+	const seen = new Set<string>();
+	payload.plan.phases.forEach((phase, phaseIndex) => {
+		if (seen.has(phase.id)) {
+			ctx.addIssue({
+				code: z.ZodIssueCode.custom,
+				path: ['plan', 'phases', phaseIndex, 'id'],
+				message: 'plan ids must be unique across phases and milestones'
+			});
+		}
+		seen.add(phase.id);
+		phase.milestones.forEach((milestone, milestoneIndex) => {
+			if (seen.has(milestone.id)) {
+				ctx.addIssue({
+					code: z.ZodIssueCode.custom,
+					path: ['plan', 'phases', phaseIndex, 'milestones', milestoneIndex, 'id'],
+					message: 'plan ids must be unique across phases and milestones'
+				});
+			}
+			seen.add(milestone.id);
+		});
+	});
 });
 
 export type IngestPayload = z.infer<typeof ingestSchema>;

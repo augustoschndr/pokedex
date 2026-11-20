@@ -53,10 +53,10 @@
 							{/if}
 						</i>
 					</button>
-					<div class="todo-copy">
+					<a class="todo-copy" href="/you/{item.id}">
 						<p class="todo-text">{item.text}</p>
 						{#if item.meta}<p class="small muted" style="margin-top: 4px">{item.meta}</p>{/if}
-					</div>
+					</a>
 				</div>
 			{/each}
 		</div>

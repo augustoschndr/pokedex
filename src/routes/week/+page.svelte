@@ -22,6 +22,12 @@
 		<SettingsLink />
 	</div>
 	{#if data.intro}<p class="meta">{data.intro}</p>{/if}
+	{#if data.plan}
+		<a class="card prep-link" href="/week/plan" style="margin-top: 16px">
+			<p class="kicker">Plan</p>
+			<p class="guide-title" style="margin-top: 4px">{data.plan.done} of {data.plan.total} done</p>
+		</a>
+	{/if}
 
 	{#if data.days.length === 0}
 		<p class="lede">No shots on the list yet.</p>
@@ -47,7 +53,7 @@
 						{#each day.items as item}
 							<div class="shot">
 								<div class="week-top">
-									<h2>{item.title}</h2>
+									<h2><a href="/week/{item.id}">{item.title}</a></h2>
 									{#if item.status}
 										<span class="chip">
 											<span class="dot {tone(item.status.tone)}"></span>
@@ -56,7 +62,11 @@
 									{/if}
 								</div>
 								{#if item.detail}<p class="meta" style="margin-top: 6px">{item.detail}</p>{/if}
-								{#if item.meta}<p class="small muted" style="margin-top: 8px">{item.meta}</p>{/if}
+								{#if item.meta || item.duration}
+									<p class="small muted" style="margin-top: 8px">
+										{item.duration ?? ''}{item.duration && item.meta ? ' · ' : ''}{item.meta ?? ''}
+									</p>
+								{/if}
 							</div>
 						{/each}
 					</article>
@@ -66,7 +76,7 @@
 				<article class="card">
 					<p class="lead">No date</p>
 					{#each data.undated as item}
-						<p class="small" style="margin-top: 8px">{item.title}</p>
+						<p class="small" style="margin-top: 8px"><a class="shot-link" href="/week/{item.id}">{item.title}</a></p>
 					{/each}
 				</article>
 			{/if}

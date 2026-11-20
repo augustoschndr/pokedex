@@ -48,7 +48,32 @@
         "title": "Film the origin-story long-form",
         "detail": "YouTube + logbook/archive, 10–12 min. Include the Turkey hostel beat so Tuesday's reel can be cut from it.",
         "meta": "Logbook",
-        "status": { "label": "Film", "tone": "warning" }
+        "status": { "label": "Film", "tone": "warning" },
+        "guide": {
+          "summary": "One take, 10 to 12 minutes, from the road to the folder.",
+          "why": "This is the film the rest of the week is cut from.",
+          "duration": "45 min",
+          "plan_ref": "ms-origin-film",
+          "steps": [
+            { "title": "Frame the desk", "detail": "Laptop open, notebook in frame, window light from the left." },
+            { "title": "Hold the last line", "detail": "Stay on the folder drawing for a few seconds after you stop talking." }
+          ],
+          "script": "I built a business across 15 countries.\n\nA hostel in Turkey. A laptop. A client site going live while I was still on the stairs.\n\nI didn't come back to Brazil to slow down. I came back because this is where my fire still burns.\n\nuntitledfolderr.co is not an agency anymore. It's a folder of folders, and each one unfolds into an app.\n\nA profile is rented land. A site, a list, and a database are ground you own.\n\nPost less. Mean more. Send every view somewhere you own.",
+          "cut": [
+            { "title": "0:00", "detail": "Open on the hook. No logo card." },
+            { "title": "Cover", "detail": "The folder drawing, held still. That frame is the thumbnail." }
+          ],
+          "tools": [
+            { "name": "Phone camera", "note": "Rear camera, 4K if the light holds." }
+          ],
+          "links": [
+            { "label": "Logbook", "url": "https://untitledfolderr.co" }
+          ],
+          "checklist": [
+            { "id": "desk", "text": "Desk framed, notifications off" },
+            { "id": "hook", "text": "Hook said once, clean" }
+          ]
+        }
       },
       {
         "id": "2026-11-24-reel",
@@ -80,21 +105,69 @@
         "title": "Film the Abrasom case reel",
         "detail": "Instagram + LinkedIn. Hook: Abrasom was tired of cold real estate bureaucracy.",
         "meta": "Proof",
-        "status": { "label": "Film", "tone": "warning" }
+        "status": { "label": "Film", "tone": "warning" },
+        "guide": { "plan_ref": "ms-abrasom", "duration": "30 min" }
       }
     ]
   },
   "todos": {
     "intro": "Owner-only or physical tasks.",
     "items": [
-      { "id": "cf-cal", "text": "Add the Cloudflare A record for cal.folderr.co", "meta": "Type A, name cal, value 72.62.62.14, DNS only" },
+      {
+        "id": "cf-cal",
+        "text": "Add the Cloudflare A record for cal.folderr.co",
+        "meta": "Type A, name cal, value 72.62.62.14, DNS only",
+        "guide": {
+          "summary": "Point cal.folderr.co at the server, then stop. The first Cal.com visit is a separate task.",
+          "why": "The booking link in the film only works after this record exists.",
+          "duration": "10 min",
+          "plan_ref": "ms-dns",
+          "steps": [
+            { "title": "Open the folderr.co zone", "detail": "DNS, not the SSL page." },
+            { "title": "Add the A record", "detail": "Name cal. IPv4 72.62.62.14. Proxy off." }
+          ],
+          "tools": [
+            { "name": "Cloudflare DNS", "url": "https://dash.cloudflare.com", "note": "The folderr.co zone." }
+          ],
+          "links": [
+            { "label": "What the record should look like", "url": "https://developers.cloudflare.com/dns/manage-dns-records/how-to/create-dns-records/" }
+          ],
+          "checklist": [
+            { "id": "record", "text": "A record saved, DNS only" },
+            { "id": "resolve", "text": "cal.folderr.co answers that address" }
+          ]
+        }
+      },
       { "id": "cal-setup", "text": "Do the Cal.com admin setup", "meta": "First visit after DNS" },
       { "id": "esim", "text": "Buy the BR WhatsApp Business eSIM", "meta": "Vivo, Claro or TIM prepaid" },
       { "id": "quo", "text": "Buy the US Quo number", "meta": "Calls and SMS for US prospects" },
       { "id": "pricing", "text": "Decide US website pricing", "meta": "US$6k–12k or keep US$5k–10k" },
       { "id": "icp", "text": "Decide the primary ICP", "meta": "Boutique luxury brokerages first" },
-      { "id": "film-week", "text": "Film this week's lessons", "meta": "Mon Nov 23 origin story, Fri Nov 27 Abrasom" },
+      { "id": "film-week", "text": "Film this week's lessons", "meta": "Mon Nov 23 origin story, Fri Nov 27 Abrasom", "guide": { "plan_ref": "phase-logbook" } },
       { "id": "wed-batch", "text": "Wednesday approval batch", "meta": "20 min. Nothing publishes without your OK" }
+    ]
+  },
+  "plan": {
+    "phases": [
+      {
+        "id": "phase-logbook",
+        "title": "Logbook launch",
+        "detail": "The origin film, and the address it sends people to.",
+        "order": 1,
+        "milestones": [
+          { "id": "ms-origin-film", "title": "Origin film in the can", "detail": "Long-form recorded. Tuesday's reel is a cut, not a new shoot." },
+          { "id": "ms-dns", "title": "cal.folderr.co resolves", "detail": "The A record, then the first Cal.com visit." }
+        ]
+      },
+      {
+        "id": "phase-proof",
+        "title": "Proof",
+        "detail": "A case the next client can watch.",
+        "order": 2,
+        "milestones": [
+          { "id": "ms-abrasom", "title": "Abrasom reel", "detail": "Friday's shoot." }
+        ]
+      }
     ]
   },
   "study": {

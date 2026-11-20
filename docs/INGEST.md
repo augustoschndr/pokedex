@@ -10,8 +10,9 @@ Canonical paths are versioned so a later MCP server can wrap them without a seco
 
 - `POST /api/v1/ingest`
 - `GET /api/v1/decisions/answers?since=<ISO-8601>`
+- `GET /api/v1/todos?since=<ISO-8601>`
 
-The same handlers also live at `/api/ingest` and `/api/decisions/answers`.
+The same handlers also live at `/api/ingest`, `/api/decisions/answers`, and `/api/todos`.
 
 ## When to post
 
@@ -30,8 +31,10 @@ The app does not run that clock. BALTHA does, and posts the result. Each success
 Omitted sections are left as they are. Sending a section replaces that section.
 
 - `today` inserts a new current lesson and keeps the previous one as history.
-- `week.items` replaces the current shot list. An empty array clears it. `week.intro` replaces the intro.
-- `todos.items` upserts by `id`. Text and meta update. `done` is kept unless `force_status: true` is sent with a boolean `done`. An item included in the list is active again. `archived: true` hides one item. An empty `items` array archives every current to-do.
+- `week.items` replaces the current shot list. An empty array clears it. `week.intro` replaces the intro. An id that comes back keeps its done tick. An included `guide` replaces that item's guide. Omitting `guide` leaves the previous one.
+- `todos.items` upserts by `id`. Text, meta, and an included `guide` update. `done` is kept unless `force_status: true` is sent with a boolean `done`. An item included in the list is active again. `archived: true` hides one item. An empty `items` array archives every current to-do. Omitting `guide` leaves the previous guide and its checklist ticks.
+- `guide.checklist` upserts by `id` under that task. Text updates. The tick is kept unless that checklist item sends `force_status: true` with a boolean `done`. An id left out of the array is archived. An empty array archives every sub-step. Omitting `checklist` leaves the current sub-steps.
+- `plan` replaces the whole plan. Phases and milestones upsert by id inside that replacement, so posting the same plan twice does not duplicate rows. Omitting `plan` leaves the current plan. An empty `phases` array clears it. Phase and milestone ids must be unique across the plan, because `guide.plan_ref` may point at either.
 - `study` replaces only the study blocks. `reels_rules` replaces only the Reels rules blocks. They do not clear each other. An empty `blocks` array clears that group.
 - `decisions` create or, while still `pending`, update title and detail. An answered decision is left untouched. Post a new `id` for a follow-up. Decisions are never deleted by ingest.
 
@@ -71,12 +74,30 @@ Ids are strings of letters, numbers, and `.` `_` `:` `-`, up to 200 characters.
       "title": "Shot",
       "detail": "Optional",
       "meta": "Optional",
-      "status": { "label": "Film", "tone": "warning" }
+      "status": { "label": "Film", "tone": "warning" },
+      "guide": { "summary": "Optional", "plan_ref": "ms-origin-film" }
     }]
   },
   "todos": {
     "intro": "Optional",
-    "items": [{ "id": "cf-cal", "text": "Do the thing", "meta": "Optional", "done": false, "force_status": false, "archived": false }]
+    "items": [{
+      "id": "cf-cal",
+      "text": "Do the thing",
+      "meta": "Optional",
+      "done": false,
+      "force_status": false,
+      "archived": false,
+      "guide": { "summary": "Optional", "plan_ref": "ms-dns" }
+    }]
+  },
+  "plan": {
+    "phases": [{
+      "id": "phase-logbook",
+      "title": "Phase",
+      "detail": "Optional",
+      "order": 1,
+      "milestones": [{ "id": "ms-origin-film", "title": "Milestone", "detail": "Optional" }]
+    }]
   },
   "study": { "intro": "Optional", "blocks": [] },
   "reels_rules": { "intro": "Optional", "blocks": [] },
@@ -86,7 +107,23 @@ Ids are strings of letters, numbers, and `.` `_` `:` `-`, up to 200 characters.
 
 `timezone` defaults to `America/Sao_Paulo`. `type` is `daily`, `weekly`, or `ad_hoc`. `for_date` is `YYYY-MM-DD` when present. Status `tone` is `default`, `warning`, `success`, or `info`.
 
-The phone does not treat `date_label` as the current day. It uses the real date in the server timezone. When `for_date` is still in the future, Today is a prep day and counts down to that date. Week rows are grouped by the `YYYY-MM-DD` prefix on each item id. Days with no item stay empty. No new ingest fields are required.
+The phone does not treat `date_label` as the current day. It uses the real date in the server timezone. When `for_date` is still in the future, Today is a prep day and counts down to that date. Week rows are grouped by the `YYYY-MM-DD` prefix on each item id. Days with no item stay empty.
+
+`guide` is optional on a to-do or a week item. The phone renders only the fields you send.
+
+| Field | Use |
+| --- | --- |
+| `summary`, `why` | Short prose on the task |
+| `duration` | A label such as `20 min` |
+| `steps[]` | `{ title, detail }` |
+| `script` | The words he reads or films. The phone gives this a large scrolling view |
+| `cut[]` | `{ title, detail }` for the edit: timestamps, b-roll, captions, the cover frame |
+| `tools[]` | `{ name, url, note }`. `url` is optional and must be `http` or `https` |
+| `links[]` | `{ label, url }`, `http` or `https` |
+| `checklist[]` | `{ id, text, done, force_status }`. Sub-steps he can tick. Ticks survive a later post unless `force_status` |
+| `plan_ref` | A phase id or a milestone id from `plan` |
+
+`plan.phases[]` is `{ id, title, detail, order, milestones }`. Each milestone is `{ id, title, detail }`. `order` is an integer. The phone counts a task toward a milestone when `plan_ref` is that milestone, and also toward the milestone's phase. A `plan_ref` that is a phase id counts toward the phase only. Done means the task's own tick, not its checklist.
 
 Study blocks:
 
@@ -133,6 +170,42 @@ Authorization: Bearer <INGEST_TOKEN>
 
 `action` is `approved`, `rejected`, or `commented`. An answer stays in the list for any `since` before `answered_at`. The first time it is returned, `notified_back_at` is set. That does not hide it.
 
+## To-do readback
+
+The phone is where ticks change. Read them back with the same bearer token:
+
+```http
+GET /api/v1/todos?since=2026-11-20T00:00:00-03:00
+Authorization: Bearer <INGEST_TOKEN>
+```
+
+`since` is optional. Without it, every current to-do, current week shot, and active checklist sub-step is returned. With it, only rows whose tick last changed at or after that instant. A text-only re-post does not count as a change. Results are oldest change first.
+
+```json
+{
+  "items": [
+    {
+      "id": "cf-cal",
+      "parent_id": null,
+      "parent_kind": null,
+      "kind": "todo",
+      "done": true,
+      "done_at": "2026-11-20T10:15:00-03:00"
+    },
+    {
+      "id": "record",
+      "parent_id": "cf-cal",
+      "parent_kind": "todo",
+      "kind": "checklist",
+      "done": false,
+      "done_at": null
+    }
+  ]
+}
+```
+
+`kind` is `todo`, `week`, or `checklist`. `parent_id` and `parent_kind` are set for checklist rows and null otherwise. `parent_kind` is `todo` or `week`. `done_at` is an ISO-8601 timestamp in the server zone when the row is done, and null when it is not. Ticking sets it. Unticking clears it. A bad `since` is `400` with `invalid_since`. The token needs the `todos:read` scope, which the primary ingest token has.
+
 If `DECISIONS_WEBHOOK_URL` is set, each answer is also POSTed as that same object (not wrapped in `answers`). Header:
 
 ```http
@@ -143,4 +216,4 @@ The HMAC key is `DECISIONS_WEBHOOK_SECRET`, or `INGEST_TOKEN` when the secret is
 
 ## Phase 2
 
-Every row is scoped by `user_id`. API tokens live in `api_token` as scrypt hashes, with a prefix and scopes `ingest:write` and `decisions:read`. The env token is the primary token for Augusto. A later public version can mint more users and tokens and wrap `/api/v1` with an MCP server. v1 does not expose that UI.
+Every row is scoped by `user_id`. API tokens live in `api_token` as scrypt hashes, with a prefix and scopes `ingest:write`, `decisions:read`, and `todos:read`. The env token is the primary token for Augusto. A later public version can mint more users and tokens and wrap `/api/v1` with an MCP server. v1 does not expose that UI.

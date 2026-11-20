@@ -305,6 +305,84 @@ try {
 	const todos2 = await api('/api/v1/todos', { cookie });
 	const cloud = todos2.json.items.find((item) => item.id === 'cf-cal');
 	check(cloud?.done === true && cloud.text === 'Updated cloudflare task', 'tick survives ingest');
+
+	const readback = await api('/api/v1/todos', { bearer: token });
+	check(readback.status === 200 && Array.isArray(readback.json.items), 'todo readback');
+	const cfTick = readback.json.items.find((item) => item.kind === 'todo' && item.id === 'cf-cal');
+	check(cfTick?.done === true && typeof cfTick.done_at === 'string' && cfTick.done_at.includes('T'), 'readback has the todo tick');
+	const record = readback.json.items.find((item) => item.kind === 'checklist' && item.id === 'record');
+	check(record?.parent_id === 'cf-cal' && record.parent_kind === 'todo' && record.done === false && record.done_at === null, 'checklist readback');
+	const shotTick = readback.json.items.find((item) => item.kind === 'week' && item.id === '2026-11-23-origin');
+	check(shotTick?.done === false && shotTick.parent_id === null, 'week shot readback');
+	const sessionList = await api('/api/v1/todos', { cookie });
+	check(sessionList.json.items?.some((item) => item.id === 'cf-cal' && item.text), 'session todo list stays the phone shape');
+	const badSince = await api('/api/v1/todos?since=not-a-date', { bearer: token });
+	check(badSince.status === 400 && badSince.json.error === 'invalid_since', 'bad since');
+
+	const sinceMark = new Date().toISOString();
+	const flipped = await api('/api/v1/checklist/toggle', {
+		method: 'POST',
+		cookie,
+		body: { parent_kind: 'todo', parent_id: 'cf-cal', id: 'record' }
+	});
+	check(flipped.status === 200 && flipped.json.item.done === true && typeof flipped.json.item.done_at === 'string', 'checklist tick');
+	const since = await api(`/api/v1/todos?since=${encodeURIComponent(sinceMark)}`, { bearer: token });
+	check(since.json.items.some((item) => item.id === 'record' && item.done === true), 'since returns the checklist change');
+	check(!since.json.items.some((item) => item.id === 'esim'), 'since skips an untouched todo');
+
+	const keepGuide = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: {
+			id: 'brief-guide-keep',
+			type: 'ad_hoc',
+			todos: {
+				items: [
+					{
+						id: 'cf-cal',
+						text: 'Updated cloudflare task',
+						guide: {
+							summary: 'Point cal.folderr.co at the server, then stop. The first Cal.com visit is a separate task.',
+							checklist: [
+								{ id: 'record', text: 'A record saved, DNS only' },
+								{ id: 'resolve', text: 'cal.folderr.co answers that address' }
+							]
+						}
+					}
+				]
+			}
+		}
+	});
+	check(keepGuide.status === 200, 'guide reingest');
+	const keptTicks = await api('/api/v1/todos', { bearer: token });
+	check(
+		keptTicks.json.items.find((item) => item.id === 'record' && item.kind === 'checklist')?.done === true,
+		'checklist tick survives reingest'
+	);
+	const stillDone = keptTicks.json.items.find((item) => item.id === 'cf-cal' && item.kind === 'todo');
+	check(stillDone?.done === true, 'todo tick survives a guide reingest');
+
+	const weekToggled = await api('/api/v1/week/2026-11-23-origin/toggle', { method: 'POST', cookie });
+	check(weekToggled.status === 200 && weekToggled.json.item.done === true, 'week tick');
+	const weekKept = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: {
+			id: 'brief-week-keep',
+			type: 'weekly',
+			week: { items: [{ id: '2026-11-23-origin', title: 'Film the origin-story long-form' }] }
+		}
+	});
+	check(weekKept.status === 200, 'week reingest');
+	const weekTicks = await api('/api/v1/todos', { bearer: token });
+	const originTick = weekTicks.json.items.find((item) => item.kind === 'week' && item.id === '2026-11-23-origin');
+	check(originTick?.done === true && typeof originTick.done_at === 'string', 'week tick survives reingest');
+	const film = await api('/week/2026-11-23-origin', { cookie });
+	check(film.status === 200 && film.text.includes('Read the script'), 'week detail keeps the script');
+	const planPage = await api('/week/plan', { cookie });
+	check(planPage.status === 200 && planPage.text.includes('Logbook launch'), 'plan page');
+	const todoDetail = await api('/you/cf-cal', { cookie });
+	check(todoDetail.status === 200 && todoDetail.text.includes('Point cal.folderr.co'), 'todo detail');
 	const decisions2 = await api('/api/v1/decisions', { cookie });
 	check(
 		decisions2.json.decisions[0].title === 'Decide US website pricing',

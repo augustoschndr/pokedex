@@ -12,7 +12,7 @@
 
 <nav class="tabbar" aria-label="Sections">
 	{#each tabs as tab}
-		<a href={tab.href} aria-current={path === tab.href ? 'page' : undefined}>
+		<a href={tab.href} aria-current={path === tab.href || path.startsWith(`${tab.href}/`) ? 'page' : undefined}>
 			<svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
 				{#if tab.icon === 'today'}
 					<circle cx="12" cy="12" r="7.25" stroke="currentColor" stroke-width="1.5" />
