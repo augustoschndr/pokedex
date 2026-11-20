@@ -345,6 +345,23 @@ try {
 	}
 	await iconBoard('#FBF7F3', origin + `/icons/apple-touch-icon-${iconRev}.png`, '#171513', 'icon-light');
 	await iconBoard('#1C1916', origin + `/icons/apple-touch-icon-dark-${iconRev}.png`, '#F6F1EA', 'icon-dark');
+	await page.goto(origin + '/week/2026-11-23-origin', { waitUntil: 'networkidle' });
+	await page.getByRole('button', { name: 'Read the script' }).waitFor();
+	await page.getByRole('heading', { name: 'Film the origin-story long-form' }).waitFor();
+	await assertFits(page, 'task-detail');
+	await shot(page, 'task-detail');
+	await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
+	await page.getByRole('button', { name: 'Read the script' }).click();
+	await page.locator('.prompter-text').waitFor();
+	await page.getByRole('radio', { name: 'Slow' }).waitFor();
+	await shot(page, 'task-script');
+	await page.getByRole('button', { name: 'Close' }).click();
+	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
+	await page.goto(origin + '/week/plan', { waitUntil: 'networkidle' });
+	await page.getByRole('heading', { name: 'Plan' }).waitFor();
+	await page.getByText('Logbook launch').waitFor();
+	await assertFits(page, 'plan-progress');
+	await shot(page, 'plan-progress');
 	await page.goto(origin + '/week', { waitUntil: 'networkidle' });
 	await page.locator('.day-line.today').waitFor();
 	await page.getByText('Nothing scheduled').first().waitFor();

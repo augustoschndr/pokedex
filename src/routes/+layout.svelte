@@ -7,6 +7,8 @@
 	import '../app.css';
 	import AppShell from '$lib/components/AppShell.svelte';
 	import Splash from '$lib/components/Splash.svelte';
+	import Teleprompter from '$lib/components/Teleprompter.svelte';
+	import { scriptReader } from '$lib/script-reader';
 	import {
 		appleTouchHref,
 		faviconDarkHref,
@@ -59,4 +61,12 @@
 	<Splash />
 {:else}
 	{@render children()}
+{/if}
+
+{#if $scriptReader}
+	<Teleprompter
+		title={$scriptReader.title}
+		text={$scriptReader.text}
+		onclose={() => scriptReader.set(null)}
+	/>
 {/if}

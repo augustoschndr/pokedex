@@ -4,7 +4,11 @@ import { userTheme } from '$lib/server/theme';
 import { THEME_COOKIE, type ThemeChoice } from '$lib/theme';
 import type { LayoutServerLoad } from './$types';
 
-const TABS = new Set(['/today', '/week', '/you', '/study', '/decisions']);
+const TAB_ROOTS = ['/today', '/week', '/you', '/study', '/decisions'];
+
+function showsTabs(path: string): boolean {
+	return TAB_ROOTS.some((root) => path === root || path.startsWith(`${root}/`));
+}
 
 export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
 	const path = url.pathname;
@@ -20,7 +24,7 @@ export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
 		user: locals.user,
 		path,
 		theme,
-		showTabs: Boolean(locals.user && TABS.has(path)),
+		showTabs: Boolean(locals.user && showsTabs(path)),
 		pendingDecisions: locals.user ? pendingDecisionCount(locals.user.id) : 0,
 		vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? ''
 	};

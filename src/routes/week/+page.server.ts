@@ -3,7 +3,7 @@ import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = ({ locals }) => {
 	if (!locals.user) {
-		return { today: '', dateLabel: '', intro: '', days: [], undated: [] };
+		return { today: '', dateLabel: '', intro: '', days: [], undated: [], plan: null };
 	}
 	return weekPage(locals.user.id);
 };

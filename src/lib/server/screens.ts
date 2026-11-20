@@ -12,7 +12,7 @@ import {
 	type DayRelation
 } from '$lib/calendar';
 import { timeZone } from './env';
-import { currentStudy, currentToday, currentTodos, currentWeek, type TodayView, type WeekItemView } from './content';
+import { currentPlan, currentStudy, currentToday, currentTodos, currentWeek, type TodayView, type WeekItemView } from './content';
 
 export type ShotPreview = WeekItemView & { date: string | null };
 
@@ -44,6 +44,7 @@ export type WeekPage = {
 	intro: string;
 	days: WeekDay[];
 	undated: ShotPreview[];
+	plan: { done: number; total: number } | null;
 };
 
 function shots(userId: string): ShotPreview[] {
@@ -92,6 +93,7 @@ export function weekPage(userId: string, now = Date.now()): WeekPage {
 		today,
 		items.flatMap((item) => (item.date ? [item.date] : []))
 	);
+	const plan = currentPlan(userId);
 	return {
 		today,
 		dateLabel: formatLong(today),
@@ -102,6 +104,7 @@ export function weekPage(userId: string, now = Date.now()): WeekPage {
 			relation: relation(date, today),
 			items: items.filter((item) => item.date === date)
 		})),
-		undated: items.filter((item) => !item.date)
+		undated: items.filter((item) => !item.date),
+		plan: plan ? { done: plan.done, total: plan.total } : null
 	};
 }

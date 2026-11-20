@@ -125,7 +125,7 @@ Also available at `/api/decisions/answers`. If the webhook URL is set, each answ
 
 ## Data
 
-SQLite in WAL mode. Every content row has `user_id`. The env ingest token is stored as a scrypt hash on `api_token` with scopes `ingest:write` and `decisions:read`, so a later public version can mint per-user tokens and wrap `/api/v1` with an MCP server. v1 ships one user and does not build that.
+SQLite in WAL mode. Every content row has `user_id`. The env ingest token is stored as a scrypt hash on `api_token` with scopes `ingest:write`, `decisions:read`, and `todos:read`, so a later public version can mint per-user tokens and wrap `/api/v1` with an MCP server. v1 ships one user and does not build that.
 
 Settings can export all JSON (`GET /api/v1/me/export`) or delete everything. The delete phrase is `DELETE MY POKEDEX DATA`. Export includes credential ids only. It does not include the ingest token, session secrets, or the VAPID private key.
 
