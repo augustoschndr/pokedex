@@ -19,8 +19,6 @@
 	}
 </script>
 
-<svelte:head><title>Only you · Pokedex</title></svelte:head>
-
 <main>
 	<div class="toprow">
 		<div class="titles">

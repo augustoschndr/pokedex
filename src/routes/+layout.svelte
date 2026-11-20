@@ -17,10 +17,14 @@
 		iconSvgHref,
 		manifestHref
 	} from '$lib/icons';
+	import { page } from '$app/state';
+	import { showsTabs } from '$lib/tabs';
 	import { applyTheme } from '$lib/theme';
 	import { onMount } from 'svelte';
 
 	let { data, children } = $props();
+	const path = $derived(page.url.pathname);
+	const showTabs = $derived(Boolean(data.user && data.tabs && showsTabs(path)));
 
 	$effect(() => {
 		if (!browser) return;
@@ -54,8 +58,8 @@
 	<link rel="manifest" href={manifestHref} />
 </svelte:head>
 
-{#if data.showTabs}
-	<AppShell path={data.path} pending={data.pendingDecisions}>
+{#if showTabs && data.tabs}
+	<AppShell path={path} pending={data.pendingDecisions} tabs={data.tabs}>
 		{@render children()}
 	</AppShell>
 	<Splash />

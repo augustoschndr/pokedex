@@ -7,8 +7,6 @@
 	const today = $derived(screen?.lesson ?? null);
 </script>
 
-<svelte:head><title>Today · Pokedex</title></svelte:head>
-
 <main>
 	<div class="toprow">
 		<p class="kicker">{screen?.dateLabel ?? 'Today'}</p>

@@ -90,7 +90,8 @@ async function assertScrollbarsHidden(page, label) {
 			const scrollsY =
 				(cs.overflowY === 'auto' || cs.overflowY === 'scroll') &&
 				el.scrollHeight > el.clientHeight + 1;
-			if (scrollsX || scrollsY) scrollers.push(el.className || el.tagName);
+			const pane = el.classList?.contains('pane');
+			if (scrollsX || (scrollsY && !pane)) scrollers.push(el.className || el.tagName);
 		}
 		return {
 			gutterX,
@@ -126,15 +127,16 @@ async function assertFits(page, label) {
 	await assertScrollbarsHidden(page, label);
 	const report = await page.evaluate(() => {
 		const bar = document.querySelector('.tabbar');
-		const main = document.querySelector('main');
+		const scroller = document.querySelector('.pane.is-active') || document.scrollingElement;
+		const main = scroller?.querySelector('main') ?? document.querySelector('main');
 		const overflow = document.documentElement.scrollWidth - window.innerWidth;
-		if (!bar || !main) return { overflow, overlap: 0, short: true };
-		const before = window.scrollY;
-		window.scrollTo(0, document.documentElement.scrollHeight);
+		if (!bar || !main || !scroller) return { overflow, overlap: 0, short: true };
+		const before = scroller.scrollTop;
+		scroller.scrollTop = scroller.scrollHeight;
 		const barTop = bar.getBoundingClientRect().top;
 		const last = main.lastElementChild ?? main;
 		const lastBottom = last.getBoundingClientRect().bottom;
-		window.scrollTo(0, before);
+		scroller.scrollTop = before;
 		return { overflow, overlap: Math.ceil(lastBottom - barTop), short: false };
 	});
 	if (report.overflow > 1) throw new Error(`${label} overflows horizontally by ${report.overflow}px`);
@@ -272,8 +274,9 @@ try {
 	}
 
 	await page.goto(origin + '/you', { waitUntil: 'networkidle' });
-	await page.getByRole('button', { name: /Mark done: Add the Cloudflare/ }).click();
-	await page.getByText('Add the Cloudflare').waitFor();
+	const you = page.locator('.pane.is-active');
+	await you.getByRole('button', { name: /Mark done: Add the Cloudflare/ }).click();
+	await you.getByText('Add the Cloudflare').waitFor();
 	await shot(page, 'tab-you-checked');
 	await assertFits(page, 'you-checked');
 
@@ -282,23 +285,42 @@ try {
 	await page.getByText(/— in \d+ days|— tomorrow/).waitFor();
 	await shot(page, 'today-prep');
 	await assertFits(page, 'today-prep');
+	await shot(page, 'tabbar-light');
 
 	const barBefore = await page.locator('.tabbar').boundingBox();
-	const layerBox = await page.locator('.page-layer').boundingBox();
+	const layerBox = await page.locator('.pager').boundingBox();
 	if (!barBefore || !layerBox) throw new Error('swipe targets missing');
+	const frame = await page.evaluate(() => {
+		const bar = document.querySelector('.tabbar');
+		const pager = document.querySelector('.pager');
+		const shell = document.querySelector('.app-shell');
+		return {
+			insidePager: Boolean(pager && bar && pager.contains(bar)),
+			barParent: bar?.parentElement === shell,
+			shellPosition: shell ? getComputedStyle(shell).position : ''
+		};
+	});
+	if (frame.insidePager || !frame.barParent || frame.shellPosition !== 'fixed') {
+		throw new Error(`tab bar is not fixed to the shell (${JSON.stringify(frame)})`);
+	}
 	await page.mouse.move(layerBox.x + layerBox.width * 0.78, 260);
 	await page.mouse.down();
 	await page.mouse.move(layerBox.x + layerBox.width * 0.22, 262, { steps: 20 });
 	const barMid = await page.locator('.tabbar').boundingBox();
 	const swipeState = await page.evaluate(() => {
-		const layer = document.querySelector('.page-layer');
+		const layer = document.querySelector('.pager');
 		const bar = document.querySelector('.tabbar');
-		const scroller = document.querySelector('.app-scroll');
+		const shell = document.querySelector('.app-shell');
+		const panes = [...document.querySelectorAll('.pager .pane')].map((node) => {
+			const rect = node.getBoundingClientRect();
+			return { x: rect.x, right: rect.right, label: node.querySelector('h1')?.textContent ?? '' };
+		});
 		return {
 			layer: layer ? getComputedStyle(layer).transform : '',
 			bar: bar ? getComputedStyle(bar).transform : '',
 			overflow: document.documentElement.scrollWidth - window.innerWidth,
-			inner: scroller ? scroller.scrollWidth - scroller.clientWidth : 0
+			inner: shell ? shell.scrollWidth - shell.clientWidth : 0,
+			panes
 		};
 	});
 	if (!barMid) throw new Error('tab bar missing mid-swipe');
@@ -310,6 +332,8 @@ try {
 	if (swipeState.overflow > 1 || swipeState.inner > 1) {
 		throw new Error(`swipe overflow ${swipeState.overflow}/${swipeState.inner}`);
 	}
+	const visible = swipeState.panes.filter((pane) => pane.right > 8 && pane.x < 367);
+	if (visible.length < 2) throw new Error(`neighbor is not on screen (${JSON.stringify(swipeState.panes)})`);
 	await shot(page, 'tabbar-swipe');
 	await page.mouse.up();
 	await page.waitForURL('**/week');
@@ -317,6 +341,15 @@ try {
 	if (!barAfter || Math.abs(barBefore.x - barAfter.x) > 1 || Math.abs(barBefore.y - barAfter.y) > 1) {
 		throw new Error('tab bar moved after the page changed');
 	}
+	await page.mouse.move(8, 280);
+	await page.mouse.down();
+	await page.mouse.move(230, 282, { steps: 20 });
+	const barBack = await page.locator('.tabbar').boundingBox();
+	if (!barBack || Math.abs(barBefore.x - barBack.x) > 1 || Math.abs(barBefore.y - barBack.y) > 1) {
+		throw new Error(`tab bar moved on the return swipe (${barBefore.x},${barBefore.y} -> ${barBack.x},${barBack.y})`);
+	}
+	await page.mouse.up();
+	await page.waitForURL('**/today');
 
 	const splashContext = await browser.newContext(phone);
 	await splashContext.addCookies(await context.cookies());
@@ -385,6 +418,7 @@ try {
 		const theme = await page.evaluate(() => document.documentElement.dataset.theme);
 		if (theme !== 'dark') throw new Error(`${name} resolved theme is ${theme}`);
 		await shot(page, name);
+		if (href === '/today') await shot(page, 'tabbar-dark');
 		if (href === '/settings') await assertScrollbarsHidden(page, name);
 		else await assertFits(page, name);
 	}
@@ -399,7 +433,11 @@ try {
 	if (settingsOverflow > 1) throw new Error('settings overflows');
 
 	await page.goto(origin + '/today', { waitUntil: 'networkidle' });
-	await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+	await page.evaluate(() => {
+		const pane = document.querySelector('.pane.is-active');
+		if (pane) pane.scrollTop = pane.scrollHeight;
+		else window.scrollTo(0, document.documentElement.scrollHeight);
+	});
 	await shot(page, 'tab-today-end');
 	await assertFits(page, 'today-end');
 

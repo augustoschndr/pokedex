@@ -6,8 +6,6 @@
 	const empty = $derived(data.study.blocks.length === 0 && data.reels_rules.blocks.length === 0);
 </script>
 
-<svelte:head><title>Study · Pokedex</title></svelte:head>
-
 <main>
 	<div class="toprow">
 		<div class="titles">
