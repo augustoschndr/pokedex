@@ -160,7 +160,7 @@
 
 		const skipTarget = (target: EventTarget | null) =>
 			target instanceof Element &&
-			Boolean(target.closest('input, textarea, select, [contenteditable="true"], .tabbar'));
+			Boolean(target.closest('input, textarea, select, button, .check, [contenteditable="true"], .tabbar'));
 
 		function onDown(event: PointerEvent) {
 			if (animating || event.button !== 0 || skipTarget(event.target)) return;

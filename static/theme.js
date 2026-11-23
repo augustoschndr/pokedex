@@ -1,14 +1,15 @@
-/* Runs before paint. Keep in step with src/lib/theme.ts. */
+/* Runs before paint when loaded directly. app.html inlines the same steps so the
+   first splash does not wait on this file. Keep the two in step with src/lib/theme.ts. */
 (function () {
-	var choice = 'system';
-	var match = document.cookie.match(/(?:^|; )pokedex-theme=([^;]*)/);
-	if (match) choice = decodeURIComponent(match[1]);
-	else {
-		try {
-			choice = localStorage.getItem('pokedex-theme') || 'system';
-		} catch (e) {
-			choice = 'system';
-		}
+	var choice = null;
+	try {
+		choice = localStorage.getItem('pokedex-theme');
+	} catch (e) {
+		choice = null;
+	}
+	if (choice !== 'light' && choice !== 'dark' && choice !== 'system') {
+		var match = document.cookie.match(/(?:^|; )pokedex-theme=([^;]*)/);
+		choice = match ? decodeURIComponent(match[1]) : 'system';
 	}
 	if (choice !== 'light' && choice !== 'dark' && choice !== 'system') choice = 'system';
 	var dark =

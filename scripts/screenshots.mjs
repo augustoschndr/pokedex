@@ -451,8 +451,36 @@ try {
 	await splashPage.goto(origin + '/today?splash=1', { waitUntil: 'networkidle' });
 	await splashPage.locator('#boot[data-ready]').waitFor();
 	await splashPage.locator('#boot svg').waitFor();
+	await splashPage.waitForFunction(() => document.documentElement.dataset.theme === 'light');
 	await shot(splashPage, 'splash');
 	await splashContext.close();
+
+	await page.evaluate(async () => {
+		await fetch('/api/v1/me/theme', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ theme: 'dark' })
+		});
+	});
+	const darkSplash = await browser.newContext(phone);
+	await darkSplash.addCookies(await context.cookies());
+	await darkSplash.addInitScript(() => {
+		localStorage.setItem('pokedex-theme', 'dark');
+	});
+	const darkSplashPage = await darkSplash.newPage();
+	await darkSplashPage.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
+	await darkSplashPage.goto(origin + '/today?splash=1', { waitUntil: 'networkidle' });
+	await darkSplashPage.locator('#boot[data-ready]').waitFor();
+	await darkSplashPage.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+	await shot(darkSplashPage, 'splash-dark');
+	await darkSplash.close();
+	await page.evaluate(async () => {
+		await fetch('/api/v1/me/theme', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ theme: 'system' })
+		});
+	});
 
 	async function iconBoard(bg, src, ink, name) {
 		const iconPage = await context.newPage();
@@ -507,6 +535,14 @@ try {
 		return video instanceof HTMLVideoElement && video.videoWidth > 0;
 	});
 	await shot(page, 'task-camera');
+	await page.getByRole('button', { name: 'Record' }).click();
+	await page.getByRole('button', { name: /Stop recording/ }).waitFor();
+	await page.waitForTimeout(400);
+	await page.getByRole('button', { name: /Stop recording/ }).click();
+	await page.getByRole('button', { name: 'Save to Photos' }).waitFor();
+	await page.getByText('Tap Save Video to keep it in Photos').waitFor();
+	await shot(page, 'task-save');
+	await page.getByRole('button', { name: 'Discard' }).click();
 	await page.getByRole('button', { name: 'Close' }).click();
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 	await page.goto(origin + '/week/plan', { waitUntil: 'networkidle' });

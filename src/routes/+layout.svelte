@@ -38,9 +38,10 @@
 
 	function dismissBoot() {
 		const boot = document.getElementById('boot');
-		if (!boot) return;
+		if (!boot || boot.dataset.done === '1') return;
 		const hold = new URLSearchParams(location.search).has('splash');
 		if (document.documentElement.dataset.splash === 'skip' && !hold) {
+			boot.dataset.done = '1';
 			boot.remove();
 			return;
 		}
@@ -48,6 +49,7 @@
 			boot.dataset.ready = '1';
 			return;
 		}
+		boot.dataset.done = '1';
 		let gone = false;
 		const go = () => {
 			if (gone) return;
