@@ -67,25 +67,29 @@ render('apple-touch-icon-dark.png', 180, dark);
 const startupDir = path.resolve('src/lib/brand/startup');
 fs.mkdirSync(startupDir, { recursive: true });
 
-/** Device pixels for the portrait launch images iOS picks from media queries. */
+/**
+ * Device pixels for the portrait launch images iOS picks from media queries.
+ * status is the status-bar height in device pixels. The web view starts below
+ * that bar, so the mark is centered in the area the inline splash occupies.
+ */
 const startupSizes = [
-	[750, 1334],
-	[640, 1136],
-	[1242, 2208],
-	[1125, 2436],
-	[828, 1792],
-	[1242, 2688],
-	[1170, 2532],
-	[1284, 2778],
-	[1179, 2556],
-	[1290, 2796]
+	[750, 1334, 40],
+	[640, 1136, 40],
+	[1242, 2208, 60],
+	[1125, 2436, 132],
+	[828, 1792, 96],
+	[1242, 2688, 132],
+	[1170, 2532, 141],
+	[1284, 2778, 141],
+	[1179, 2556, 162],
+	[1290, 2796, 162]
 ];
 
-function startupSvg(width, height, bg, ink) {
+function startupSvg(width, height, status, bg, ink) {
 	const mark = Math.round(Math.min(width, height) * 0.16);
 	const scale = mark / 128;
 	const x = (width - mark) / 2;
-	const y = (height - mark) / 2;
+	const y = (height + status - mark) / 2;
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
   <rect width="${width}" height="${height}" fill="${bg}"/>
@@ -95,8 +99,8 @@ function startupSvg(width, height, bg, ink) {
 </svg>`;
 }
 
-function renderStartup(name, width, height, bg, ink) {
-	const resvg = new Resvg(startupSvg(width, height, bg, ink), {
+function renderStartup(name, width, height, status, bg, ink) {
+	const resvg = new Resvg(startupSvg(width, height, status, bg, ink), {
 		fitTo: { mode: 'width', value: width },
 		background: bg
 	});
@@ -107,9 +111,9 @@ function renderStartup(name, width, height, bg, ink) {
 	fs.writeFileSync(path.join(startupDir, name), rendered.asPng());
 }
 
-for (const [width, height] of startupSizes) {
-	renderStartup(`startup-${width}x${height}.png`, width, height, light.bg, light.ink);
-	renderStartup(`startup-${width}x${height}-dark.png`, width, height, dark.bg, dark.ink);
+for (const [width, height, status] of startupSizes) {
+	renderStartup(`startup-${width}x${height}.png`, width, height, status, light.bg, light.ink);
+	renderStartup(`startup-${width}x${height}-dark.png`, width, height, status, dark.bg, dark.ink);
 }
 
 console.log('icons written');

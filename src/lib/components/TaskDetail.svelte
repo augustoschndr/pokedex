@@ -1,45 +1,82 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
 	import { onDestroy } from 'svelte';
+	import { takeCheckPress } from '$lib/check-press';
+	import { createToggleQueue } from '$lib/toggle-queue';
 	import { safeHttpUrl } from '$lib/urls';
 	import { scriptReader } from '$lib/script-reader';
 	import type { TaskView } from '$lib/server/content';
 
 	let { task }: { task: TaskView } = $props();
 
-	let busy = $state<string | null>(null);
+	let mainOverride = $state<boolean | null>(null);
+	let checkOverrides = $state<Record<string, boolean>>({});
 	let error = $state('');
 
 	const guide = $derived(task.guide);
 	const script = $derived(guide?.script?.trim() ?? '');
+	const done = $derived(mainOverride ?? task.done);
 
-	async function toggleMain() {
-		error = '';
-		busy = 'main';
-		const path = task.kind === 'todo' ? `/api/v1/todos/${encodeURIComponent(task.id)}/toggle` : `/api/v1/week/${encodeURIComponent(task.id)}/toggle`;
-		const response = await fetch(path, { method: 'POST' });
-		busy = null;
-		if (!response.ok) {
+	const mainQueue = createToggleQueue({
+		onFail: () => {
+			mainOverride = null;
 			error = 'Could not update that item';
-			return;
+		},
+		onIdle: async () => {
+			await invalidateAll();
+			if (mainOverride !== null && mainOverride === task.done) mainOverride = null;
 		}
-		await invalidateAll();
+	});
+
+	const checkQueues = new Map<string, (post: () => Promise<boolean>) => void>();
+
+	function stepDone(id: string, value: boolean) {
+		return id in checkOverrides ? checkOverrides[id] : value;
 	}
 
-	async function toggleCheck(id: string) {
-		error = '';
-		busy = id;
-		const response = await fetch('/api/v1/checklist/toggle', {
-			method: 'POST',
-			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ parent_kind: task.kind, parent_id: task.id, id })
+	function queueForStep(id: string) {
+		const existing = checkQueues.get(id);
+		if (existing) return existing;
+		const queue = createToggleQueue({
+			onFail: () => {
+				delete checkOverrides[id];
+				error = 'Could not update that step';
+			},
+			onIdle: async () => {
+				await invalidateAll();
+				const item = task.checklist.find((row) => row.id === id);
+				if (item && id in checkOverrides && checkOverrides[id] === item.done) delete checkOverrides[id];
+			}
 		});
-		busy = null;
-		if (!response.ok) {
-			error = 'Could not update that step';
-			return;
-		}
-		await invalidateAll();
+		checkQueues.set(id, queue);
+		return queue;
+	}
+
+	function flipMain() {
+		error = '';
+		const next = !done;
+		mainOverride = next;
+		const path =
+			task.kind === 'todo'
+				? `/api/v1/todos/${encodeURIComponent(task.id)}/toggle`
+				: `/api/v1/week/${encodeURIComponent(task.id)}/toggle`;
+		mainQueue(async () => {
+			const response = await fetch(path, { method: 'POST' });
+			return response.ok;
+		});
+	}
+
+	function flipStep(id: string, value: boolean) {
+		error = '';
+		checkOverrides[id] = !stepDone(id, value);
+		queueForStep(id)(async () => {
+			const response = await fetch('/api/v1/checklist/toggle', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ parent_kind: task.kind, parent_id: task.id, id })
+			});
+			return response.ok;
+		});
 	}
 
 	onDestroy(() => scriptReader.set(null));
@@ -64,17 +101,27 @@
 		{#if task.meta}<span class="chip">{task.meta}</span>{/if}
 	</div>
 
-	<button class="card tick-row" type="button" disabled={busy === 'main'} onclick={toggleMain}>
+	<button
+		class="card tick-row"
+		type="button"
+		aria-pressed={done}
+		onpointerdown={(event) => {
+			if (takeCheckPress(event)) flipMain();
+		}}
+		onclick={(event) => {
+			if (takeCheckPress(event)) flipMain();
+		}}
+	>
 		<span class="check" aria-hidden="true">
 			<i>
-				{#if task.done}
+				{#if done}
 					<svg width="14" height="14" viewBox="0 0 14 14">
 						<path d="M2.5 7.2l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
 					</svg>
 				{/if}
 			</i>
 		</span>
-		<span class="tick-label">{task.done ? 'Done' : 'Mark done'}</span>
+		<span class="tick-label">{done ? 'Done' : 'Mark done'}</span>
 	</button>
 
 	{#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -168,20 +215,21 @@
 			<h2>Checklist</h2>
 			<div class="card" style="margin-top: 12px">
 				{#each task.checklist as item}
-					<div class="todo" class:done={item.done}>
+					<div class="todo" class:done={stepDone(item.id, item.done)}>
 						<button
 							class="check"
 							type="button"
-							aria-pressed={item.done}
-							aria-label={item.done ? `Mark not done: ${item.text}` : `Mark done: ${item.text}`}
-							disabled={busy === item.id}
+							aria-pressed={stepDone(item.id, item.done)}
+							aria-label={stepDone(item.id, item.done) ? `Mark not done: ${item.text}` : `Mark done: ${item.text}`}
+							onpointerdown={(event) => {
+								if (takeCheckPress(event)) flipStep(item.id, item.done);
+							}}
 							onclick={(event) => {
-								event.stopPropagation();
-								toggleCheck(item.id);
+								if (takeCheckPress(event)) flipStep(item.id, item.done);
 							}}
 						>
 							<i>
-								{#if item.done}
+								{#if stepDone(item.id, item.done)}
 									<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
 										<path d="M2.5 7.2l3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
 									</svg>

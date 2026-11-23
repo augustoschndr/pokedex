@@ -206,6 +206,7 @@
 				savedName = file.name;
 				savedUrl = URL.createObjectURL(blob);
 				recording = false;
+				void shareTake(false);
 			};
 			rec.start(250);
 			recorder = rec;
@@ -220,7 +221,11 @@
 		}
 	}
 
-	async function shareOrSave() {
+	function releaseTake() {
+		discardTake();
+	}
+
+	async function shareTake(fromUser: boolean) {
 		const file = savedFile;
 		const url = savedUrl;
 		if (!file || !url) return;
@@ -228,17 +233,27 @@
 		try {
 			if (navigator.canShare?.(payload)) {
 				await navigator.share(payload);
+				if (!disposed) releaseTake();
 				return;
 			}
 		} catch (error) {
-			if (error instanceof DOMException && error.name === 'AbortError') return;
+			if (error instanceof DOMException && (error.name === 'AbortError' || error.name === 'NotAllowedError')) return;
 		}
+		if (!fromUser || disposed) return;
 		const link = document.createElement('a');
 		link.href = url;
 		link.download = file.name;
 		document.body.appendChild(link);
 		link.click();
 		link.remove();
+		window.setTimeout(() => {
+			if (savedUrl === url) releaseTake();
+		}, 1500);
+	}
+
+	function retake() {
+		releaseTake();
+		if (cameraOn && stream) void toggleRecord();
 	}
 
 	function close() {
@@ -452,9 +467,12 @@
 	{#if recordError}<p class="prompter-note" role="alert">{recordError}</p>{/if}
 	{#if savedUrl}
 		<div class="prompter-save" role="status">
-			<p>This take stays on this phone. Nothing is uploaded.</p>
-			<button class="pill" type="button" onclick={shareOrSave}>Save</button>
-			<button class="text-btn" type="button" onclick={discardTake}>Discard</button>
+			<p>Tap Save Video to keep it in Photos</p>
+			<button class="pill" type="button" onclick={() => shareTake(true)}>Save to Photos</button>
+			<div class="prompter-save-actions">
+				<button class="text-btn" type="button" onclick={retake}>Retake</button>
+				<button class="text-btn" type="button" onclick={releaseTake}>Discard</button>
+			</div>
 		</div>
 	{/if}
 </div>

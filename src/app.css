@@ -349,7 +349,7 @@ textarea.field { min-height: 96px; resize: vertical; }
 .todo.done .todo-text { color: var(--ink-soft); text-decoration: line-through; text-decoration-thickness: 1px; }
 .check {
 	position: relative;
-	z-index: 1;
+	z-index: 2;
 	width: 44px;
 	height: 44px;
 	border: 0;
@@ -358,6 +358,8 @@ textarea.field { min-height: 96px; resize: vertical; }
 	display: grid;
 	place-items: center;
 	flex: none;
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
 }
 .check i {
 	width: 26px;
@@ -366,8 +368,12 @@ textarea.field { min-height: 96px; resize: vertical; }
 	border: var(--hairline) solid var(--line);
 	display: grid;
 	place-items: center;
+	transition: transform 80ms var(--ease);
 }
-.check[aria-pressed="true"] i { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.check[aria-pressed="true"] i,
+.tick-row[aria-pressed="true"] .check i { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.check:active i,
+.tick-row:active .check i { transform: scale(0.9); }
 
 .node {
 	border: var(--hairline) solid var(--line);
@@ -492,17 +498,18 @@ textarea.field { min-height: 96px; resize: vertical; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-	.pill, .icon-btn, .check i {
+	.pill, .icon-btn {
 		transition: background-color 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--ease);
 	}
 	.pill:active, .icon-btn:active { transform: scale(0.98); }
 	.back-btn { transition: opacity 120ms var(--ease); }
 	.back-btn:active { opacity: 0.55; }
 	.prompter-count b { animation: prompter-count 900ms var(--ease); }
-	a.card, button.card, .card:has(> a.stretch), .shot, .todo, .plan-task {
+	a.card, button.card, .card:has(> a.stretch), .shot, .plan-task {
 		transition: transform 120ms var(--ease), opacity 120ms var(--ease);
 	}
-	a.card:active, button.card:active, .card:has(> a.stretch:active), .shot:active, .todo:active, .plan-task:active {
+	button.tick-row { transition: transform 80ms var(--ease); }
+	a.card:active, button.card:active, .card:has(> a.stretch:active), .shot:has(a.stretch:active), .todo:has(> a.stretch:active), .plan-task:active {
 		transform: scale(0.985);
 		opacity: 0.94;
 	}
@@ -511,6 +518,8 @@ textarea.field { min-height: 96px; resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
 	.pager.is-moving { will-change: auto; }
 	#boot { transition: none; animation: none; }
+	.check i, .tick-row { transition: none; }
+	.check:active i, .tick-row:active .check i { transform: none; }
 }
 
 .guide {
@@ -628,6 +637,8 @@ a.stretch:focus-visible { outline: none; }
 	align-items: center;
 	gap: 4px;
 	text-align: left;
+	touch-action: manipulation;
+	-webkit-tap-highlight-color: transparent;
 }
 .tick-label { font-weight: 600; }
 .meter {
@@ -792,49 +803,24 @@ a.stretch:focus-visible { outline: none; }
 }
 .prompter-save {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 8px;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 10px;
 	margin-top: 8px;
-	padding: 10px 12px;
+	padding: 14px;
 	background: var(--card);
 	color: var(--ink);
 	border: var(--hairline) solid var(--line);
 	border-radius: 16px;
 }
-.prompter-save p { flex: 1 1 140px; font-size: 14px; line-height: 1.35; }
-.prompter-save .pill { min-height: 44px; }
+.prompter-save p { font-size: 15px; line-height: 1.35; }
+.prompter-save .pill { min-height: 52px; font-size: 17px; }
+.prompter-save-actions { display: flex; gap: 8px; }
+.prompter-save-actions .text-btn { flex: 1; min-height: 44px; text-align: center; }
 @keyframes prompter-count {
 	from { opacity: 0; transform: scale(0.92); }
 	to { opacity: 1; transform: none; }
 }
-
-html[data-splash='skip'] .splash { display: none; }
-.splash {
-	position: fixed;
-	inset: 0;
-	z-index: 70;
-	display: grid;
-	place-items: center;
-	background: var(--bg);
-	color: var(--ink);
-	transition: opacity 320ms var(--ease);
-}
-.splash.is-out { opacity: 0; pointer-events: none; }
-.splash-stage {
-	position: relative;
-	width: min(240px, 72vw);
-	height: min(240px, 72vw);
-	display: grid;
-	place-items: center;
-}
-.splash-stage canvas {
-	position: absolute;
-	inset: 0;
-	width: 100%;
-	height: 100%;
-}
-.splash-mark { width: 84px; height: 84px; position: relative; }
 
 @media (min-width: 480px) {
 	body { background: #ebe4da; }

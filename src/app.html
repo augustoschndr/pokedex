@@ -5,7 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="theme-color" content="#FBF7F3" />
 		<meta name="color-scheme" content="light" />
-		<script src="/theme.js"></script>
+		<script>(function(){var choice=null;try{choice=localStorage.getItem("pokedex-theme")}catch(e){choice=null}if(choice!=="light"&&choice!=="dark"&&choice!=="system"){var match=document.cookie.match(/(?:^|; )pokedex-theme=([^;]*)/);choice=match?decodeURIComponent(match[1]):"system"}if(choice!=="light"&&choice!=="dark"&&choice!=="system")choice="system";var dark=choice==="dark"||(choice!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);var root=document.documentElement;root.dataset.theme=dark?"dark":"light";root.style.colorScheme=dark?"dark":"light";var color=dark?"#1C1916":"#FBF7F3";var theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.setAttribute("content",color);var scheme=document.querySelector('meta[name="color-scheme"]');if(scheme)scheme.setAttribute("content",dark?"dark":"light")})();</script>
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="mobile-web-app-capable" content="yes" />
 		<!--
@@ -52,7 +52,7 @@
 				background: #fbf7f3;
 				color: #171513;
 			}
-			#boot svg { width: 84px; height: 84px; display: block; }
+			#boot svg { width: 16vmin; height: 16vmin; display: block; }
 			#boot.is-out { opacity: 0; pointer-events: none; }
 			@media (prefers-color-scheme: dark) {
 				html, body, #boot { background: #1c1916; color: #f6f1ea; }
@@ -68,11 +68,6 @@
 			html[data-splash="skip"] #boot { display: none; }
 			@media (prefers-reduced-motion: no-preference) {
 				#boot { transition: opacity 280ms ease; }
-				#boot svg { animation: boot-mark 700ms ease both; }
-			}
-			@keyframes boot-mark {
-				from { opacity: 0; transform: scale(0.96); }
-				to { opacity: 1; transform: none; }
 			}
 		</style>
 		<title>Pokedex</title>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { test } from 'node:test';
 import {
@@ -49,6 +50,8 @@ test('the teleprompter scrolls on a frame loop and does not upload the take', ()
 	assert.match(source, /facingMode:\s*'user'/);
 	assert.match(source, /navigator\.share/);
 	assert.match(source, /wakeLock/);
+	assert.match(source, /Save to Photos/);
+	assert.match(source, /Tap Save Video to keep it in Photos/);
 	assert.doesNotMatch(source, /fetch\(/);
 	const detail = fs.readFileSync('src/lib/components/TaskDetail.svelte', 'utf8');
 	assert.match(detail, /class="back-btn"/);
@@ -59,10 +62,18 @@ test('the teleprompter scrolls on a frame loop and does not upload the take', ()
 	assert.match(hooks, /geolocation=\(\)/);
 	const html = fs.readFileSync('src/app.html', 'utf8');
 	assert.match(html, /id="boot"/);
+	assert.match(html, /localStorage\.getItem\("pokedex-theme"\)/);
+	assert.match(html, /16vmin/);
+	assert.doesNotMatch(html, /boot-mark/);
+	assert.doesNotMatch(html, /theme\.js/);
 	assert.match(html, /startup-750x1334-v4\.png/);
 	assert.match(html, /device-width: 375px\) and \(device-height: 667px\)/);
 	assert.match(html, /prefers-color-scheme: dark/);
 	const png = fs.readFileSync('src/lib/brand/startup/startup-750x1334.png');
 	assert.equal(png.readUInt32BE(16), 750);
 	assert.equal(png.readUInt32BE(20), 1334);
+	const inline = html.match(/<script>([\s\S]*?)<\/script>/);
+	assert.ok(inline);
+	const hash = crypto.createHash('sha256').update(inline[1]).digest('base64');
+	assert.match(fs.readFileSync('svelte.config.js', 'utf8'), new RegExp(hash.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
