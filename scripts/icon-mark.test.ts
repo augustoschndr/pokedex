@@ -16,10 +16,12 @@ test('the splash mark matches the icon source', () => {
 	const svg = fs.readFileSync('src/lib/brand/icons/icon.svg', 'utf8');
 	const dark = fs.readFileSync('src/lib/brand/icons/icon-dark.svg', 'utf8');
 	const mark = fs.readFileSync('src/lib/components/Mark.svelte', 'utf8');
+	const boot = fs.readFileSync('src/app.html', 'utf8');
 	for (const shape of shapes) {
 		assert.ok(svg.includes(shape), shape);
 		assert.ok(dark.includes(shape), shape);
 		assert.ok(mark.includes(shape), shape);
+		assert.ok(boot.includes(shape), shape);
 	}
 	assert.match(svg, /fill="#FBF7F3"/);
 	assert.match(dark, /fill="#1C1916"/);

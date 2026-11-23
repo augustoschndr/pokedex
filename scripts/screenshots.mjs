@@ -155,12 +155,14 @@ async function assertHeaderClear(page, name, { width, height, top, bottom, schem
 		root.style.setProperty('--sab', `${bottom}px`);
 	}, { top, bottom });
 	const box = await page.evaluate(() => {
-		const button = document.querySelector('.pane.detail .icon-btn');
+		const button = document.querySelector('.pane.detail .back-btn');
 		const kicker = document.querySelector('.pane.detail .kicker');
 		const bar = document.querySelector('.tabbar');
 		const shell = document.querySelector('.app-shell');
 		return {
 			buttonTop: button ? button.getBoundingClientRect().top : -1,
+			buttonWidth: button ? button.getBoundingClientRect().width : 0,
+			buttonHeight: button ? button.getBoundingClientRect().height : 0,
 			kickerTop: kicker ? kicker.getBoundingClientRect().top : -1,
 			barGap: bar ? window.innerHeight - bar.getBoundingClientRect().bottom : -1,
 			shellTop: shell ? shell.getBoundingClientRect().top : -1,
@@ -170,6 +172,9 @@ async function assertHeaderClear(page, name, { width, height, top, bottom, schem
 	});
 	const label = name || `${width}x${height}`;
 	if (box.buttonTop < top + 12) throw new Error(`${label} back button starts at ${box.buttonTop}, inset is ${top}`);
+	if (box.buttonWidth < 44 || box.buttonHeight < 44) {
+		throw new Error(`${label} back button is ${box.buttonWidth}x${box.buttonHeight}`);
+	}
 	if (box.kickerTop < top) throw new Error(`${label} eyebrow starts at ${box.kickerTop}, inset is ${top}`);
 	if (Math.abs(box.shellTop) > 1 || Math.abs(box.shellBottom - box.innerHeight) > 1) {
 		throw new Error(`${label} shell does not fill the screen (${box.shellTop}..${box.shellBottom} of ${box.innerHeight})`);
@@ -180,7 +185,10 @@ async function assertHeaderClear(page, name, { width, height, top, bottom, schem
 	if (name) await shot(page, name);
 }
 
-const browser = await chromium.launch({ headless: true });
+const browser = await chromium.launch({
+	headless: true,
+	args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream']
+});
 try {
 	await waitHealth();
 	const ingested = await fetch(`${origin}/api/v1/ingest`, {
@@ -199,6 +207,7 @@ try {
 			'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1'
 	};
 	const context = await browser.newContext(phone);
+	await context.grantPermissions(['camera', 'microphone']);
 	await context.addInitScript(() => {
 		const mark = () => {
 			const root = document.documentElement;
@@ -334,8 +343,20 @@ try {
 	await assertFits(page, 'you-checked');
 
 	await page.goto(origin + '/today', { waitUntil: 'networkidle' });
-	await page.getByRole('heading', { name: 'Prep day' }).waitFor();
-	await page.getByText(/— in \d+ days|— tomorrow/).waitFor();
+	const zoneToday = new Intl.DateTimeFormat('en-CA', {
+		timeZone: 'America/Sao_Paulo',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	}).format(new Date());
+	if (zoneToday < '2026-11-23') {
+		await page.getByRole('heading', { name: 'Prep day' }).waitFor();
+		await page.getByText(/— in \d+ days|— tomorrow/).waitFor();
+	} else if (zoneToday === '2026-11-23') {
+		await page.getByRole('heading', { name: 'Origin-story long-form' }).waitFor();
+	} else {
+		await page.getByRole('heading', { name: 'No brief today' }).waitFor();
+	}
 	await shot(page, 'today-prep');
 	await assertFits(page, 'today-prep');
 	await shot(page, 'tabbar-light');
@@ -428,8 +449,8 @@ try {
 	const splashPage = await splashContext.newPage();
 	await splashPage.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
 	await splashPage.goto(origin + '/today?splash=1', { waitUntil: 'networkidle' });
-	await splashPage.locator('.splash[data-ready]').waitFor();
-	await splashPage.locator('canvas[data-ready]').waitFor();
+	await splashPage.locator('#boot[data-ready]').waitFor();
+	await splashPage.locator('#boot svg').waitFor();
 	await shot(splashPage, 'splash');
 	await splashContext.close();
 
@@ -471,8 +492,21 @@ try {
 	await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' });
 	await page.getByRole('button', { name: 'Read the script' }).click();
 	await page.locator('.prompter-text').waitFor();
-	await page.getByRole('radio', { name: 'Slow' }).waitFor();
+	await page.locator('.prompter-count').waitFor({ state: 'detached' });
+	await page.getByRole('button', { name: 'Pause' }).click();
+	await page.locator('.prompter-scroll').evaluate((node) => {
+		node.scrollTop = 0;
+	});
+	await page.getByRole('button', { name: 'Play' }).waitFor();
+	await page.getByRole('slider', { name: 'Scroll speed' }).waitFor();
 	await shot(page, 'task-script');
+	await page.getByRole('button', { name: 'Show camera' }).click();
+	await page.locator('video.prompter-camera').waitFor();
+	await page.waitForFunction(() => {
+		const video = document.querySelector('video.prompter-camera');
+		return video instanceof HTMLVideoElement && video.videoWidth > 0;
+	});
+	await shot(page, 'task-camera');
 	await page.getByRole('button', { name: 'Close' }).click();
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 	await page.goto(origin + '/week/plan', { waitUntil: 'networkidle' });
@@ -481,7 +515,7 @@ try {
 	await assertFits(page, 'plan-progress');
 	await shot(page, 'plan-progress');
 	await page.goto(origin + '/week', { waitUntil: 'networkidle' });
-	await page.locator('.day-line.today').waitFor();
+	await page.locator('.day-line.today, .card.day.today').first().waitFor();
 	await page.getByText('Nothing scheduled').first().waitFor();
 	await shot(page, 'week-calendar');
 	await assertFits(page, 'week-calendar');
@@ -492,14 +526,15 @@ try {
 	await shot(page, 'settings-light');
 
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' });
+	const todayHeading = zoneToday < '2026-11-23' ? 'Prep day' : zoneToday === '2026-11-23' ? /Origin-story/ : /No brief today/;
 	const darkShots = [
-		['today-prep-dark', '/today', 'Prep day'],
+		['today-prep-dark', '/today', todayHeading],
 		['week-calendar-dark', '/week', 'This week'],
 		['settings-dark', '/settings', 'Settings']
 	];
 	for (const [name, href, heading] of darkShots) {
 		await page.goto(origin + href, { waitUntil: 'networkidle' });
-		await page.getByRole('heading', { name: heading, exact: true }).waitFor();
+		await page.getByRole('heading', { name: heading, exact: typeof heading === 'string' }).waitFor();
 		const theme = await page.evaluate(() => document.documentElement.dataset.theme);
 		if (theme !== 'dark') throw new Error(`${name} resolved theme is ${theme}`);
 		await shot(page, name);
