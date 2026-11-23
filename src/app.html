@@ -5,7 +5,7 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="theme-color" content="#FBF7F3" />
 		<meta name="color-scheme" content="light" />
-		<script>(function(){var choice=null;try{choice=localStorage.getItem("pokedex-theme")}catch(e){choice=null}if(choice!=="light"&&choice!=="dark"&&choice!=="system"){var match=document.cookie.match(/(?:^|; )pokedex-theme=([^;]*)/);choice=match?decodeURIComponent(match[1]):"system"}if(choice!=="light"&&choice!=="dark"&&choice!=="system")choice="system";var dark=choice==="dark"||(choice!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);var root=document.documentElement;root.dataset.theme=dark?"dark":"light";root.style.colorScheme=dark?"dark":"light";var color=dark?"#1C1916":"#FBF7F3";var theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.setAttribute("content",color);var scheme=document.querySelector('meta[name="color-scheme"]');if(scheme)scheme.setAttribute("content",dark?"dark":"light")})();</script>
+		<script>(function(){var choice="system";try{var saved=localStorage.getItem("pokedex-theme");if(saved==="light"||saved==="dark"||saved==="system")choice=saved}catch(e){}var dark=choice==="dark"||(choice!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches);var root=document.documentElement;var bg=dark?"#1C1916":"#FBF7F3";var ink=dark?"#F6F1EA":"#171513";root.dataset.theme=dark?"dark":"light";root.style.colorScheme=dark?"dark":"light";root.style.background=bg;root.style.color=ink;var theme=document.querySelector('meta[name="theme-color"]');if(theme)theme.setAttribute("content",bg);var scheme=document.querySelector('meta[name="color-scheme"]');if(scheme)scheme.setAttribute("content",dark?"dark":"light")})();</script>
 		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<meta name="mobile-web-app-capable" content="yes" />
 		<!--
@@ -16,31 +16,6 @@
 		-->
 		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
 		<meta name="apple-mobile-web-app-title" content="Pokedex" />
-		<!--
-			Launch images. Light is the default match. The dark link is listed
-			second so iOS uses it when the phone is in dark mode. iPhone SE
-			(2nd generation) is 750x1334.
-		-->
-		<link rel="apple-touch-startup-image" href="/icons/startup-750x1334-v4.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-750x1334-dark-v4.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-640x1136-v4.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-640x1136-dark-v4.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1242x2208-v4.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1242x2208-dark-v4.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1125x2436-v4.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1125x2436-dark-v4.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-828x1792-v4.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-828x1792-dark-v4.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1242x2688-v4.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1242x2688-dark-v4.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1170x2532-v4.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1170x2532-dark-v4.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1284x2778-v4.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1284x2778-dark-v4.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1179x2556-v4.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1179x2556-dark-v4.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1290x2796-v4.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
-		<link rel="apple-touch-startup-image" href="/icons/startup-1290x2796-dark-v4.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait) and (prefers-color-scheme: dark)" />
 		<style>
 			html, body { margin: 0; background: #fbf7f3; }
 			#boot {
@@ -54,9 +29,6 @@
 			}
 			#boot svg { width: 16vmin; height: 16vmin; display: block; }
 			#boot.is-out { opacity: 0; pointer-events: none; }
-			@media (prefers-color-scheme: dark) {
-				html, body, #boot { background: #1c1916; color: #f6f1ea; }
-			}
 			html[data-theme="light"], html[data-theme="light"] body, html[data-theme="light"] #boot {
 				background: #fbf7f3;
 				color: #171513;
@@ -67,7 +39,7 @@
 			}
 			html[data-splash="skip"] #boot { display: none; }
 			@media (prefers-reduced-motion: no-preference) {
-				#boot { transition: opacity 280ms ease; }
+				#boot { transition: opacity 250ms ease; }
 			}
 		</style>
 		<title>Pokedex</title>

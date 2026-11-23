@@ -59,7 +59,7 @@
 				if (boot.isConnected) boot.remove();
 			};
 			boot.addEventListener('transitionend', remove, { once: true });
-			window.setTimeout(remove, 400);
+			window.setTimeout(remove, 300);
 		};
 		const cap = window.setTimeout(go, 2500);
 		requestAnimationFrame(() => {

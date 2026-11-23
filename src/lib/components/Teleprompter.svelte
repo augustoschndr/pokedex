@@ -7,7 +7,8 @@
 		formatClock,
 		micErrorMessage,
 		pickRecorderMime,
-		recordingExtension
+		shareRecording,
+		takeFromChunks
 	} from '$lib/prompter';
 
 	let { title, text, onclose }: { title: string; text: string; onclose: () => void } = $props();
@@ -29,12 +30,15 @@
 	let recordMs = $state(0);
 	let savedUrl = $state<string | null>(null);
 	let savedName = $state('');
+	let saveOffer = $state(false);
 	let stream = $state<MediaStream | null>(null);
 
 	let countTimer = 0;
 	let recorder: MediaRecorder | null = null;
 	let audioStream: MediaStream | null = null;
 	let savedFile: File | null = null;
+	let chunks: Blob[] = [];
+	let chosenMime = '';
 	let arming = false;
 	let disposed = false;
 	let tapX = 0;
@@ -108,25 +112,81 @@
 		savedUrl = null;
 		savedFile = null;
 		savedName = '';
+		saveOffer = false;
 	}
 
-	function stopRecorder(keepTake: boolean) {
-		const active = recorder;
-		recorder = null;
-		if (!active || active.state === 'inactive') {
-			stopAudio();
-			recording = false;
+	function holdTake(file: File) {
+		discardTake();
+		savedFile = file;
+		savedName = file.name;
+		savedUrl = URL.createObjectURL(file);
+	}
+
+	function offerShare(file: File, fromTap: boolean) {
+		holdTake(file);
+		if (!fromTap) {
+			saveOffer = true;
 			return;
 		}
-		if (!keepTake) active.onstop = null;
+		const payload = { files: [file], title };
+		const canShare = navigator.canShare;
+		const share = navigator.share;
+		if (typeof share !== 'function' || (typeof canShare === 'function' && !canShare(payload))) {
+			saveOffer = true;
+			return;
+		}
+		// Still inside the Stop tap. Do not await before share, or iOS drops the gesture.
+		void shareRecording(file, (data) => share.call(navigator, data), (data) => canShare?.call(navigator, data) ?? true, title).then(
+			(outcome) => {
+				if (disposed || savedFile !== file) return;
+				if (outcome === 'shared') releaseTake();
+				else saveOffer = true;
+			}
+		);
+	}
+
+	function finishTake() {
+		const active = recorder;
+		recorder = null;
+		recording = false;
+		if (!active || active.state === 'inactive') {
+			stopAudio();
+			return;
+		}
+		try {
+			active.requestData();
+		} catch {
+			/* the timeslices already collected are enough */
+		}
 		try {
 			active.stop();
 		} catch {
 			/* already stopped */
 		}
-		if (!keepTake) {
+		const file = takeFromChunks(chunks, active.mimeType || chosenMime);
+		if (!file) return;
+		offerShare(file, true);
+	}
+
+	function stopRecorder(keepTake: boolean) {
+		if (keepTake) {
+			finishTake();
+			return;
+		}
+		const active = recorder;
+		recorder = null;
+		chunks = [];
+		recording = false;
+		if (!active || active.state === 'inactive') {
 			stopAudio();
-			recording = false;
+			return;
+		}
+		active.ondataavailable = null;
+		active.onstop = () => stopAudio();
+		try {
+			active.stop();
+		} catch {
+			stopAudio();
 		}
 	}
 
@@ -191,24 +251,20 @@
 				recordError = 'This browser cannot record video.';
 				return;
 			}
-			const chunks: Blob[] = [];
+			chunks = [];
+			chosenMime = mime;
 			rec.ondataavailable = (event) => {
 				if (event.data.size > 0) chunks.push(event.data);
 			};
 			rec.onstop = () => {
 				stopAudio();
-				if (disposed) return;
-				const type = (rec.mimeType || mime || 'video/mp4').split(';')[0] || 'video/mp4';
-				const blob = new Blob(chunks, { type });
-				const file = new File([blob], `pokedex-take.${recordingExtension(type)}`, { type });
-				discardTake();
-				savedFile = file;
-				savedName = file.name;
-				savedUrl = URL.createObjectURL(blob);
+				if (disposed || savedFile) return;
 				recording = false;
-				void shareTake(false);
+				const file = takeFromChunks(chunks, rec.mimeType || chosenMime);
+				if (!file) return;
+				offerShare(file, false);
 			};
-			rec.start(250);
+			rec.start(500);
 			recorder = rec;
 			audioStream = audio;
 			recording = true;
@@ -225,30 +281,32 @@
 		discardTake();
 	}
 
-	async function shareTake(fromUser: boolean) {
+	function saveToPhotos() {
 		const file = savedFile;
 		const url = savedUrl;
 		if (!file || !url) return;
 		const payload = { files: [file], title };
-		try {
-			if (navigator.canShare?.(payload)) {
-				await navigator.share(payload);
-				if (!disposed) releaseTake();
-				return;
-			}
-		} catch (error) {
-			if (error instanceof DOMException && (error.name === 'AbortError' || error.name === 'NotAllowedError')) return;
+		const share = navigator.share;
+		if (typeof share !== 'function' || (typeof navigator.canShare === 'function' && !navigator.canShare(payload))) {
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = file.name;
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			window.setTimeout(() => {
+				if (savedUrl === url) releaseTake();
+			}, 1500);
+			return;
 		}
-		if (!fromUser || disposed) return;
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = file.name;
-		document.body.appendChild(link);
-		link.click();
-		link.remove();
-		window.setTimeout(() => {
-			if (savedUrl === url) releaseTake();
-		}, 1500);
+		void share.call(navigator, payload).then(
+			() => {
+				if (!disposed) releaseTake();
+			},
+			(error: unknown) => {
+				if (error instanceof DOMException && error.name === 'AbortError') return;
+			}
+		);
 	}
 
 	function retake() {
@@ -465,10 +523,10 @@
 
 	{#if cameraError}<p class="prompter-camera-note" role="alert">{cameraError}</p>{/if}
 	{#if recordError}<p class="prompter-note" role="alert">{recordError}</p>{/if}
-	{#if savedUrl}
+	{#if savedUrl && saveOffer}
 		<div class="prompter-save" role="status">
-			<p>Tap Save Video to keep it in Photos</p>
-			<button class="pill" type="button" onclick={() => shareTake(true)}>Save to Photos</button>
+			<p>Tap Save Video to put it in Photos</p>
+			<button class="pill" type="button" onclick={saveToPhotos}>Save to Photos</button>
 			<div class="prompter-save-actions">
 				<button class="text-btn" type="button" onclick={retake}>Retake</button>
 				<button class="text-btn" type="button" onclick={releaseTake}>Discard</button>
