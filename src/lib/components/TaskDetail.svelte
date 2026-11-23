@@ -46,16 +46,15 @@
 </script>
 
 <main>
-	<div class="toprow">
-		<a class="icon-btn" href={task.back} aria-label="Back">
-			<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-				<path d="M11 4L6 9l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-			</svg>
-		</a>
-		<div class="titles">
-			<p class="kicker">{task.kind === 'todo' ? 'Only you' : 'This week'}</p>
-			<h1>{task.title}</h1>
-		</div>
+	<a class="back-btn" href={task.back}>
+		<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<path d="M11 4L6 9l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+		</svg>
+		Back
+	</a>
+	<div class="titles">
+		<p class="kicker">{task.kind === 'todo' ? 'Only you' : 'This week'}</p>
+		<h1>{task.title}</h1>
 	</div>
 
 	<div class="chips">

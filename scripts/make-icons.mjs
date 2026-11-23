@@ -64,4 +64,52 @@ render('favicon-32.png', 32, light);
 render('favicon-32-dark.png', 32, dark);
 render('apple-touch-icon-dark.png', 180, dark);
 
+const startupDir = path.resolve('src/lib/brand/startup');
+fs.mkdirSync(startupDir, { recursive: true });
+
+/** Device pixels for the portrait launch images iOS picks from media queries. */
+const startupSizes = [
+	[750, 1334],
+	[640, 1136],
+	[1242, 2208],
+	[1125, 2436],
+	[828, 1792],
+	[1242, 2688],
+	[1170, 2532],
+	[1284, 2778],
+	[1179, 2556],
+	[1290, 2796]
+];
+
+function startupSvg(width, height, bg, ink) {
+	const mark = Math.round(Math.min(width, height) * 0.16);
+	const scale = mark / 128;
+	const x = (width - mark) / 2;
+	const y = (height - mark) / 2;
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="${bg}"/>
+  <g transform="translate(${x} ${y}) scale(${scale})" fill="none" stroke="${ink}" stroke-width="4.75" stroke-linecap="round" stroke-linejoin="round">
+    ${markShapes}
+  </g>
+</svg>`;
+}
+
+function renderStartup(name, width, height, bg, ink) {
+	const resvg = new Resvg(startupSvg(width, height, bg, ink), {
+		fitTo: { mode: 'width', value: width },
+		background: bg
+	});
+	const rendered = resvg.render();
+	if (rendered.width !== width || rendered.height !== height) {
+		throw new Error(`${name} rendered ${rendered.width}x${rendered.height}`);
+	}
+	fs.writeFileSync(path.join(startupDir, name), rendered.asPng());
+}
+
+for (const [width, height] of startupSizes) {
+	renderStartup(`startup-${width}x${height}.png`, width, height, light.bg, light.ink);
+	renderStartup(`startup-${width}x${height}-dark.png`, width, height, dark.bg, dark.ink);
+}
+
 console.log('icons written');

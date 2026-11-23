@@ -256,6 +256,27 @@ html:has(.app-shell) body {
 .dot.ok { background: var(--ok); }
 .dot.info { background: var(--info); }
 
+.back-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	min-width: 44px;
+	min-height: 44px;
+	margin: 0 0 4px;
+	padding: 0 8px 0 0;
+	border: 0;
+	background: none;
+	box-shadow: none;
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	color: var(--ink);
+	text-decoration: none;
+	font-size: 17px;
+	font-weight: 500;
+	line-height: 1;
+}
+.back-btn svg { display: block; }
+
 .icon-btn {
 	width: 44px;
 	height: 44px;
@@ -475,6 +496,9 @@ textarea.field { min-height: 96px; resize: vertical; }
 		transition: background-color 160ms var(--ease), color 160ms var(--ease), transform 160ms var(--ease);
 	}
 	.pill:active, .icon-btn:active { transform: scale(0.98); }
+	.back-btn { transition: opacity 120ms var(--ease); }
+	.back-btn:active { opacity: 0.55; }
+	.prompter-count b { animation: prompter-count 900ms var(--ease); }
 	a.card, button.card, .card:has(> a.stretch), .shot, .todo, .plan-task {
 		transition: transform 120ms var(--ease), opacity 120ms var(--ease);
 	}
@@ -486,7 +510,7 @@ textarea.field { min-height: 96px; resize: vertical; }
 
 @media (prefers-reduced-motion: reduce) {
 	.pager.is-moving { will-change: auto; }
-	.splash { transition: none; }
+	#boot { transition: none; animation: none; }
 }
 
 .guide {
@@ -629,44 +653,161 @@ a.stretch:focus-visible { outline: none; }
 .prompter {
 	position: fixed;
 	inset: 0;
-	z-index: 80;
+	z-index: 90;
 	background: var(--bg);
 	color: var(--ink);
 	display: flex;
 	flex-direction: column;
-	padding: calc(8px + var(--sat)) 20px calc(16px + var(--sab));
+	padding: calc(8px + var(--sat)) 20px calc(12px + var(--sab));
+	touch-action: manipulation;
 }
-.prompter-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-.prompter-scroll { flex: 1; min-height: 0; overflow: auto; margin-top: 8px; }
+.prompter-bar,
+.prompter-stage,
+.prompter-camera-note,
+.prompter-note,
+.prompter-save {
+	position: relative;
+	z-index: 2;
+}
+.prompter-bar { display: flex; flex-direction: column; flex: none; }
+.prompter-row { display: flex; align-items: center; gap: 2px; min-height: 44px; }
+.prompter-spacer { flex: 1; }
+.prompter .text-btn { color: inherit; padding-left: 0; padding-right: 8px; }
+.prompter-icon {
+	width: 44px;
+	height: 44px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	flex: none;
+}
+.prompter-icon:disabled { opacity: 0.38; }
+.prompter-icon.is-rec { width: auto; min-width: 44px; padding: 0 8px; gap: 6px; display: inline-flex; }
+.prompter-size { font-weight: 600; font-size: 15px; }
+.rec-idle, .rec-dot { width: 14px; height: 14px; border-radius: 999px; box-sizing: border-box; }
+.rec-idle { border: 2px solid currentColor; }
+.rec-dot { background: var(--danger); }
+.rec-time { font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
+.prompter-speed { flex: 1; display: flex; align-items: center; min-width: 0; min-height: 44px; }
+.prompter-speed input {
+	width: 100%;
+	height: 44px;
+	margin: 0;
+	accent-color: var(--ink);
+	background: transparent;
+}
+.prompter-stage { flex: 1; min-height: 0; }
+.prompter-guide {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 33%;
+	height: 2px;
+	background: color-mix(in srgb, var(--ink) 28%, transparent);
+	pointer-events: none;
+	z-index: 2;
+}
+.prompter-scroll { height: 100%; overflow: auto; }
+.prompter-lead { height: calc(33% - 28px); }
+.prompter-tail { height: 70%; }
+.prompter-pad { transform-origin: center top; }
+.prompter.is-mirror .prompter-pad { transform: scaleX(-1); }
 .prompter-text {
-	margin-top: 18px;
+	margin-top: 8px;
 	font-family: var(--display);
 	font-weight: 600;
-	font-size: 28px;
-	line-height: 1.45;
+	line-height: 1.35;
 	letter-spacing: -0.02em;
 	white-space: pre-wrap;
 }
-.speed {
+.prompter-count {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	pointer-events: none;
+	z-index: 3;
+}
+.prompter-count b {
+	font-family: var(--display);
+	font-size: 96px;
+	font-weight: 600;
+	line-height: 1;
+}
+.prompter-placeholder {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	background:
+		radial-gradient(circle at 50% 14%, rgba(255, 255, 255, 0.1), transparent 26%),
+		#1c1916;
+}
+.prompter-placeholder span {
+	position: absolute;
+	left: 50%;
+	top: 14%;
+	width: 72px;
+	height: 72px;
+	transform: translate(-50%, -50%);
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	border-radius: 999px;
+}
+.prompter-camera {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	opacity: 0;
+	transform: scaleX(-1);
+}
+.prompter-camera.is-ready { opacity: 1; }
+.prompter-scrim {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
+	background: linear-gradient(to bottom, rgba(16, 14, 12, 0.78) 0%, rgba(16, 14, 12, 0.62) 36%, rgba(16, 14, 12, 0.28) 58%, rgba(16, 14, 12, 0.16) 100%);
+}
+.prompter-gap { display: none; }
+.prompter.camera { background: #100e0c; color: #f6f1ea; }
+.prompter.camera .prompter-stage { order: 0; flex: none; height: 42%; }
+.prompter.camera .prompter-gap { display: block; order: 1; flex: 1; min-height: 12px; }
+.prompter.camera .prompter-camera-note,
+.prompter.camera .prompter-note,
+.prompter.camera .prompter-save,
+.prompter.camera .prompter-bar { order: 2; }
+.prompter.camera .prompter-guide { background: rgba(246, 241, 234, 0.72); }
+.prompter.camera .kicker { color: rgba(246, 241, 234, 0.78); }
+.prompter.camera .prompter-text { text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55); }
+.prompter.camera .prompter-speed input { accent-color: #f6f1ea; }
+.prompter-camera-note, .prompter-note {
+	margin: 8px 0 0;
+	font-size: 15px;
+	line-height: 1.4;
+}
+.prompter-save {
 	display: flex;
-	flex: 1;
-	min-width: 220px;
-	gap: 2px;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	padding: 10px 12px;
+	background: var(--card);
+	color: var(--ink);
 	border: var(--hairline) solid var(--line);
-	border-radius: 999px;
-	padding: 2px;
-	box-shadow: var(--highlight);
+	border-radius: 16px;
 }
-.speed button {
-	flex: 1;
-	border: 0;
-	background: transparent;
-	border-radius: 999px;
-	min-height: 32px;
-	padding: 0 4px;
-	font-size: 12px;
+.prompter-save p { flex: 1 1 140px; font-size: 14px; line-height: 1.35; }
+.prompter-save .pill { min-height: 44px; }
+@keyframes prompter-count {
+	from { opacity: 0; transform: scale(0.92); }
+	to { opacity: 1; transform: none; }
 }
-.speed button[aria-checked='true'] { background: var(--ink); color: var(--bg); }
 
 html[data-splash='skip'] .splash { display: none; }
 .splash {

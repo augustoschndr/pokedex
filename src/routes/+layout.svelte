@@ -6,7 +6,6 @@
 	import '@fontsource/bricolage-grotesque/600.css';
 	import '../app.css';
 	import AppShell from '$lib/components/AppShell.svelte';
-	import Splash from '$lib/components/Splash.svelte';
 	import Teleprompter from '$lib/components/Teleprompter.svelte';
 	import { scriptReader } from '$lib/script-reader';
 	import {
@@ -37,7 +36,38 @@
 		return () => media.removeEventListener('change', onChange);
 	});
 
+	function dismissBoot() {
+		const boot = document.getElementById('boot');
+		if (!boot) return;
+		const hold = new URLSearchParams(location.search).has('splash');
+		if (document.documentElement.dataset.splash === 'skip' && !hold) {
+			boot.remove();
+			return;
+		}
+		if (hold) {
+			boot.dataset.ready = '1';
+			return;
+		}
+		let gone = false;
+		const go = () => {
+			if (gone) return;
+			gone = true;
+			boot.classList.add('is-out');
+			const remove = () => {
+				if (boot.isConnected) boot.remove();
+			};
+			boot.addEventListener('transitionend', remove, { once: true });
+			window.setTimeout(remove, 400);
+		};
+		const cap = window.setTimeout(go, 2500);
+		requestAnimationFrame(() => {
+			window.clearTimeout(cap);
+			go();
+		});
+	}
+
 	onMount(() => {
+		dismissBoot();
 		if (!('serviceWorker' in navigator)) return;
 		const registered = navigator.serviceWorker.register('/service-worker.js').catch(() => undefined);
 		if (!data.user || !data.vapidPublicKey) return;
@@ -67,7 +97,6 @@
 	<AppShell path={path} pending={data.pendingDecisions} tabs={data.tabs}>
 		{@render children()}
 	</AppShell>
-	<Splash />
 {:else}
 	{@render children()}
 {/if}

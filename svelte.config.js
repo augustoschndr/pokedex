@@ -16,6 +16,7 @@ const config = {
 				'script-src': ['self'],
 				'style-src': ['self', 'unsafe-inline'],
 				'img-src': ['self', 'data:'],
+				'media-src': ['self', 'blob:', 'mediastream:'],
 				'font-src': ['self'],
 				'connect-src': ['self'],
 				'manifest-src': ['self'],
