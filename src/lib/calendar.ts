@@ -144,6 +144,18 @@ export function effectiveDate(base: string | null, override: string | null, id: 
 	return dateFromId(id);
 }
 
+/** The day the plan gave this item, before any slide. */
+export function planDate(base: string | null, id: string): string | null {
+	if (base && isIsoDate(base)) return base;
+	return dateFromId(id);
+}
+
+/** True when a reschedule override moved the item off its plan day. */
+export function isSlipped(base: string | null, scheduled: string | null, id: string): boolean {
+	const plan = planDate(base, id);
+	return Boolean(scheduled && isIsoDate(scheduled) && plan && scheduled !== plan);
+}
+
 /**
  * Plan date and reschedule override after an ingest.
  * Omitting `date`, or sending the same plan date again, keeps the override.

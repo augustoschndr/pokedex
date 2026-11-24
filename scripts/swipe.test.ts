@@ -5,8 +5,8 @@ import { aimedVelocity, commitDirection, follow, neighbor, stepSpring, tabRoot }
 test('tabs move one step and stop at the ends', () => {
 	assert.equal(neighbor('/today', 1), '/week');
 	assert.equal(neighbor('/today', -1), null);
-	assert.equal(neighbor('/decisions', 1), null);
-	assert.equal(neighbor('/you', -1), '/week');
+	assert.equal(neighbor('/more', 1), null);
+	assert.equal(neighbor('/plan', -1), '/week');
 	assert.equal(neighbor('/settings', 1), null);
 });
 
@@ -25,9 +25,11 @@ test('a long drag or a flick changes tabs', () => {
 });
 
 test('detail routes stay on the tab that owns them', () => {
-	assert.equal(tabRoot('/you/cf-cal'), '/you');
-	assert.equal(tabRoot('/week/plan'), '/week');
-	assert.equal(tabRoot('/settings'), null);
+	assert.equal(tabRoot('/you/cf-cal'), '/more');
+	assert.equal(tabRoot('/week/plan'), '/plan');
+	assert.equal(tabRoot('/plan/phase-logbook'), '/plan');
+	assert.equal(tabRoot('/settings'), '/more');
+	assert.equal(tabRoot('/briefs/abc'), '/more');
 });
 
 test('the spring lands on the target and keeps speed aimed at it', () => {

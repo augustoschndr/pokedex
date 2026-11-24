@@ -1,4 +1,6 @@
-export const TAB_HREFS = ['/today', '/week', '/you', '/study', '/decisions'] as const;
+export const TAB_HREFS = ['/today', '/week', '/plan', '/more'] as const;
+
+const MORE_ROOTS = ['/you', '/study', '/decisions', '/settings', '/briefs'] as const;
 
 export type TabHref = (typeof TAB_HREFS)[number];
 
@@ -6,12 +8,16 @@ export function isTab(path: string): path is TabHref {
 	return (TAB_HREFS as readonly string[]).includes(path);
 }
 
+function owns(path: string, root: string): boolean {
+	return path === root || path.startsWith(`${root}/`);
+}
+
 /** A tab root, or the tab that owns a detail route such as /you/:id. */
 export function tabRoot(path: string): TabHref | null {
 	if (isTab(path)) return path;
-	for (const href of TAB_HREFS) {
-		if (path.startsWith(`${href}/`)) return href;
-	}
+	if (owns(path, '/plan') || path === '/week/plan') return '/plan';
+	if (owns(path, '/week')) return '/week';
+	if (MORE_ROOTS.some((root) => owns(path, root))) return '/more';
 	return null;
 }
 

@@ -7,7 +7,7 @@ import type { IngestPayload } from './schema';
 
 export function pushTarget(payload: IngestPayload): { title: string; body: string; url: string } {
 	let url = '/today';
-	if (payload.decisions && payload.decisions.length > 0) url = '/decisions';
+	if (payload.decisions && payload.decisions.length > 0) url = '/today';
 	else if (payload.today) url = '/today';
 	else if (payload.week) url = '/week';
 	else if (payload.todos) url = '/you';

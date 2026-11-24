@@ -1,6 +1,6 @@
 # Pokedex
 
-Augusto's pocket assistant. An installable iPhone PWA for the physical side of the work: the lesson to film, the week's shot list, owner-only to-dos, study notes (including Reels rules), and decisions waiting on him.
+Augusto's pocket assistant. An installable iPhone PWA for the CEO Operating Plan: today's task, this week's list, the plan, and everything else (study, briefs, decisions, settings).
 
 BALTHA posts content. Augusto reads it on his phone, ticks physical to-dos, and answers decisions. The phone cannot edit briefs. There is no analytics, no third-party push service, and no font or script loaded from a CDN at runtime.
 
@@ -31,7 +31,7 @@ POKEDEX_SETUP_CODE=ABCD-EFGH
 
 That code is stored only as a scrypt hash, expires in 24 hours, and works once. Enter it, create a passkey with Touch ID, then follow the onboarding steps. iPhone and iPad Safari have no install prompt: the screen shows Share, Add to Home Screen, and Add. Notifications are requested only from the Home Screen app, on iOS 16.4 or newer. Android and desktop use the browser install prompt when it is offered.
 
-Today and This week follow the real date in `TZ` (America/Sao_Paulo). A brief dated in the future is a prep day, not today's lesson. Settings stores Light, Dark, or System for each user.
+Today, Week, and Plan follow the real date in `TZ` (America/Sao_Paulo). A brief dated in the future is a prep day. An undone day slides forward on its own. Settings, under More, stores Light, Dark, or System for each user.
 
 If the code scrolls off the logs, set `SETUP_CODE` and restart while no passkey exists, or run:
 

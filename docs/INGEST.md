@@ -170,7 +170,7 @@ Node `kind` of `terminal` is drawn as a filled box. Anything else is an outline.
 
 A full example lives in [example-payload.json](example-payload.json).
 
-`push` is optional. If it is missing, the notification title falls back to `title` or `Pokedex`, and the body to `A new brief is ready`. The notification opens Decisions when the post includes decisions, otherwise Today, This week, Only you, or Study.
+`push` is optional. If it is missing, the notification title falls back to `title` or `Pokedex`, and the body to `A new brief is ready`. The notification opens Today when the post includes a decision or a lesson, otherwise Week, Only you, or Study. A pending decision is shown on Today. Decisions have no due date.
 
 ## Answers
 
@@ -190,6 +190,7 @@ Authorization: Bearer <INGEST_TOKEN>
       "id": "dec-us-pricing-2026-11",
       "title": "Decide US website pricing",
       "action": "approved",
+      "option": "Approve",
       "comment": "Keep US$5k–10k and sell Portal as founding-client early access.",
       "answered_at": "2026-11-20T10:15:00-03:00"
     }
@@ -197,7 +198,7 @@ Authorization: Bearer <INGEST_TOKEN>
 }
 ```
 
-`action` is `approved`, `rejected`, or `commented`. An answer stays in the list for any `since` before `answered_at`. The first time it is returned, `notified_back_at` is set. That does not hide it.
+`action` is `approved`, `rejected`, or `commented`. `option` is the label of that choice: `Approve`, `Reject`, or `Comment`. An answer stays in the list for any `since` before `answered_at`. The first time it is returned, `notified_back_at` is set. That does not hide it.
 
 ## To-do readback
 

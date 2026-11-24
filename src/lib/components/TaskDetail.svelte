@@ -5,6 +5,7 @@
 	import { createToggleQueue } from '$lib/toggle-queue';
 	import { safeHttpUrl } from '$lib/urls';
 	import { scriptReader } from '$lib/script-reader';
+	import Tags from '$lib/components/Tags.svelte';
 	import type { TaskView } from '$lib/server/content';
 
 	let { task }: { task: TaskView } = $props();
@@ -159,6 +160,7 @@
 		<h1>{task.title}</h1>
 	</div>
 
+	<Tags phase={task.plan?.phaseTitle} frame={task.plan?.frame} />
 	<div class="chips">
 		{#if task.lead}<span class="chip">{task.lead}</span>{/if}
 		{#if guide?.duration}<span class="chip">{guide.duration}</span>{/if}
@@ -321,7 +323,7 @@
 	{/if}
 
 	{#if task.plan}
-		<a class="card prep-link" href="/week/plan#plan-{task.plan.id}" style="margin-top: 22px">
+		<a class="card prep-link" href="/plan/{task.plan.phaseId}#plan-{task.plan.id}" style="margin-top: 22px">
 			<p class="kicker">{task.plan.kind === 'milestone' ? 'Milestone' : 'Phase'}</p>
 			<p class="guide-title" style="margin-top: 4px">{task.plan.title}</p>
 		</a>
