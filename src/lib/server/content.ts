@@ -1,3 +1,5 @@
+import { formatDayNum } from '$lib/calendar';
+import { effectiveDate } from '$lib/schedule';
 import { randomId } from './crypto';
 import { db, getMeta } from './db';
 import { timeZone } from './env';
@@ -28,6 +30,7 @@ export type WeekItemView = {
 	status: { label: string; tone: string } | null;
 	done: boolean;
 	duration: string | null;
+	date: string | null;
 };
 
 export type TodoView = {
@@ -88,6 +91,8 @@ function parentIsOpen(userId: string, parentKind: 'todo' | 'week', parentId: str
 
 export type CheckView = { id: string; text: string; done: boolean };
 
+export type StepNote = { index: number; text: string };
+
 export type TaskView = {
 	kind: 'todo' | 'week';
 	id: string;
@@ -99,9 +104,21 @@ export type TaskView = {
 	done: boolean;
 	guide: Guide | null;
 	checklist: CheckView[];
+	stepNotes: StepNote[];
 	plan: { id: string; title: string; kind: 'phase' | 'milestone' } | null;
 	back: string;
 };
+
+function notesFor(userId: string, parentKind: 'todo' | 'week', parentId: string): StepNote[] {
+	const rows = db()
+		.prepare(
+			`SELECT step_index, text FROM step_comment
+       WHERE user_id = ? AND parent_kind = ? AND parent_id = ?
+       ORDER BY step_index ASC`
+		)
+		.all(userId, parentKind, parentId) as { step_index: number; text: string }[];
+	return rows.map((row) => ({ index: row.step_index, text: row.text }));
+}
 
 function checklistFor(userId: string, parentKind: 'todo' | 'week', parentId: string): CheckView[] {
 	const rows = db()
@@ -131,31 +148,42 @@ export function getTask(userId: string, kind: 'todo' | 'week', id: string): Task
 	if (kind === 'todo') {
 		const row = db()
 			.prepare(
-				`SELECT id, text, meta, done, guide_json FROM todo WHERE user_id = ? AND id = ? AND archived = 0`
+				`SELECT id, text, meta, done, guide_json, base_date, scheduled_on
+         FROM todo WHERE user_id = ? AND id = ? AND archived = 0`
 			)
 			.get(userId, id) as
-			| { id: string; text: string; meta: string | null; done: number; guide_json: string | null }
+			| {
+					id: string;
+					text: string;
+					meta: string | null;
+					done: number;
+					guide_json: string | null;
+					base_date: string | null;
+					scheduled_on: string | null;
+			  }
 			| undefined;
 		if (!row) return null;
 		const guide = readGuide(row.guide_json);
+		const date = effectiveDate(row.base_date, row.scheduled_on, row.id);
 		return {
 			kind: 'todo',
 			id: row.id,
 			title: row.text,
 			detail: null,
 			meta: row.meta,
-			lead: null,
+			lead: date ? formatDayNum(date) : null,
 			status: null,
 			done: row.done === 1,
 			guide,
 			checklist: checklistFor(userId, 'todo', row.id),
+			stepNotes: notesFor(userId, 'todo', row.id),
 			plan: planLabel(userId, guide?.plan_ref),
 			back: '/you'
 		};
 	}
 	const row = db()
 		.prepare(
-			`SELECT ingest_id, lead, title, detail, meta, status_label, status_tone, done, guide_json
+			`SELECT ingest_id, lead, title, detail, meta, status_label, status_tone, done, guide_json, base_date, scheduled_on
        FROM week_item WHERE user_id = ? AND ingest_id = ? AND is_current = 1`
 		)
 		.get(userId, id) as
@@ -169,21 +197,25 @@ export function getTask(userId: string, kind: 'todo' | 'week', id: string): Task
 				status_tone: string | null;
 				done: number;
 				guide_json: string | null;
+				base_date: string | null;
+				scheduled_on: string | null;
 		  }
 		| undefined;
 	if (!row) return null;
 	const guide = readGuide(row.guide_json);
+	const date = effectiveDate(row.base_date, row.scheduled_on, row.ingest_id);
 	return {
 		kind: 'week',
 		id: row.ingest_id,
 		title: row.title,
 		detail: row.detail,
 		meta: row.meta,
-		lead: row.lead,
+		lead: date ? formatDayNum(date) : row.lead,
 		status: row.status_label ? { label: row.status_label, tone: row.status_tone ?? 'default' } : null,
 		done: row.done === 1,
 		guide,
 		checklist: checklistFor(userId, 'week', row.ingest_id),
+		stepNotes: notesFor(userId, 'week', row.ingest_id),
 		plan: planLabel(userId, guide?.plan_ref),
 		back: '/week'
 	};
@@ -290,6 +322,12 @@ function linkedTasks(userId: string): { ref: string; kind: 'todo' | 'week'; id: 
 	return linked;
 }
 
+export type StepCommentRecord = {
+	index: number;
+	comment: string;
+	updated_at: string;
+};
+
 export type TickRecord = {
 	id: string;
 	parent_id: string | null;
@@ -298,12 +336,54 @@ export type TickRecord = {
 	done: boolean;
 	done_at: string | null;
 	epoch: number | null;
+	date?: string | null;
+	steps?: StepCommentRecord[];
 };
+
+type CommentHit = StepCommentRecord & { ms: number };
+
+function commentMap(userId: string): Map<string, CommentHit[]> {
+	const rows = db()
+		.prepare(
+			`SELECT parent_kind, parent_id, step_index, text, updated_at
+       FROM step_comment WHERE user_id = ? ORDER BY step_index ASC`
+		)
+		.all(userId) as {
+		parent_kind: 'todo' | 'week';
+		parent_id: string;
+		step_index: number;
+		text: string;
+		updated_at: string;
+	}[];
+	const map = new Map<string, CommentHit[]>();
+	for (const row of rows) {
+		const key = `${row.parent_kind}:${row.parent_id}`;
+		const list = map.get(key) ?? [];
+		const ms = Date.parse(row.updated_at);
+		list.push({
+			index: row.step_index,
+			comment: row.text,
+			updated_at: presentDoneAt(row.updated_at) ?? row.updated_at,
+			ms: Number.isNaN(ms) ? 0 : ms
+		});
+		map.set(key, list);
+	}
+	return map;
+}
+
+function withSteps(record: TickRecord, comments: Map<string, CommentHit[]>): TickRecord {
+	if (record.kind === 'checklist') return record;
+	const hits = comments.get(`${record.kind}:${record.id}`) ?? [];
+	return {
+		...record,
+		steps: hits.map(({ index, comment, updated_at }) => ({ index, comment, updated_at }))
+	};
+}
 
 export function listTicks(userId: string, sinceMs: number | null): TickRecord[] {
 	const todos = db()
 		.prepare(
-			`SELECT id, done, done_at, status_epoch FROM todo
+			`SELECT id, done, done_at, status_epoch, base_date, scheduled_on FROM todo
        WHERE user_id = ? AND archived = 0 AND (? IS NULL OR status_epoch >= ?)
        ORDER BY status_epoch ASC, id ASC`
 		)
@@ -312,10 +392,12 @@ export function listTicks(userId: string, sinceMs: number | null): TickRecord[] 
 		done: number;
 		done_at: string | null;
 		status_epoch: number | null;
+		base_date: string | null;
+		scheduled_on: string | null;
 	}[];
 	const week = db()
 		.prepare(
-			`SELECT ingest_id, done, done_at, status_epoch FROM week_item
+			`SELECT ingest_id, done, done_at, status_epoch, base_date, scheduled_on FROM week_item
        WHERE user_id = ? AND is_current = 1 AND (? IS NULL OR status_epoch >= ?)
        ORDER BY status_epoch ASC, ingest_id ASC`
 		)
@@ -324,6 +406,8 @@ export function listTicks(userId: string, sinceMs: number | null): TickRecord[] 
 		done: number;
 		done_at: string | null;
 		status_epoch: number | null;
+		base_date: string | null;
+		scheduled_on: string | null;
 	}[];
 	const checks = db()
 		.prepare(
@@ -340,6 +424,7 @@ export function listTicks(userId: string, sinceMs: number | null): TickRecord[] 
 		status_epoch: number | null;
 	}[];
 	const openChecks = checks.filter((row) => parentIsOpen(userId, row.parent_kind, row.parent_id));
+	const comments = commentMap(userId);
 	const records: TickRecord[] = [
 		...todos.map((row) => ({
 			id: row.id,
@@ -348,7 +433,8 @@ export function listTicks(userId: string, sinceMs: number | null): TickRecord[] 
 			kind: 'todo' as const,
 			done: row.done === 1,
 			done_at: presentDoneAt(row.done_at),
-			epoch: row.status_epoch
+			epoch: row.status_epoch,
+			date: effectiveDate(row.base_date, row.scheduled_on, row.id)
 		})),
 		...week.map((row) => ({
 			id: row.ingest_id,
@@ -357,7 +443,8 @@ export function listTicks(userId: string, sinceMs: number | null): TickRecord[] 
 			kind: 'week' as const,
 			done: row.done === 1,
 			done_at: presentDoneAt(row.done_at),
-			epoch: row.status_epoch
+			epoch: row.status_epoch,
+			date: effectiveDate(row.base_date, row.scheduled_on, row.ingest_id)
 		})),
 		...openChecks.map((row) => ({
 			id: row.id,
@@ -369,7 +456,77 @@ export function listTicks(userId: string, sinceMs: number | null): TickRecord[] 
 			epoch: row.status_epoch
 		}))
 	];
-	return records.sort((a, b) => (a.epoch ?? -1) - (b.epoch ?? -1) || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
+	if (sinceMs !== null) {
+		const have = new Set(records.map((record) => `${record.kind}:${record.id}`));
+		for (const [key, hits] of comments) {
+			if (!hits.some((hit) => hit.ms >= sinceMs) || have.has(key)) continue;
+			const split = key.indexOf(':');
+			const kind = key.slice(0, split) as 'todo' | 'week';
+			const id = key.slice(split + 1);
+			const extra = parentTick(userId, kind, id);
+			if (extra) records.push(extra);
+		}
+	}
+	return records
+		.map((record) => withSteps(record, comments))
+		.sort((a, b) => (a.epoch ?? -1) - (b.epoch ?? -1) || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
+}
+
+function parentTick(userId: string, kind: 'todo' | 'week', id: string): TickRecord | null {
+	if (kind === 'todo') {
+		const row = db()
+			.prepare(
+				`SELECT id, done, done_at, status_epoch, base_date, scheduled_on
+         FROM todo WHERE user_id = ? AND id = ? AND archived = 0`
+			)
+			.get(userId, id) as
+			| {
+					id: string;
+					done: number;
+					done_at: string | null;
+					status_epoch: number | null;
+					base_date: string | null;
+					scheduled_on: string | null;
+			  }
+			| undefined;
+		if (!row) return null;
+		return {
+			id: row.id,
+			parent_id: null,
+			parent_kind: null,
+			kind: 'todo',
+			done: row.done === 1,
+			done_at: presentDoneAt(row.done_at),
+			epoch: row.status_epoch,
+			date: effectiveDate(row.base_date, row.scheduled_on, row.id)
+		};
+	}
+	const row = db()
+		.prepare(
+			`SELECT ingest_id, done, done_at, status_epoch, base_date, scheduled_on
+       FROM week_item WHERE user_id = ? AND ingest_id = ? AND is_current = 1`
+		)
+		.get(userId, id) as
+		| {
+				ingest_id: string;
+				done: number;
+				done_at: string | null;
+				status_epoch: number | null;
+				base_date: string | null;
+				scheduled_on: string | null;
+		  }
+		| undefined;
+	if (!row) return null;
+	return {
+		id: row.ingest_id,
+		parent_id: null,
+		parent_kind: null,
+		kind: 'week',
+		done: row.done === 1,
+		done_at: presentDoneAt(row.done_at),
+		epoch: row.status_epoch,
+		date: effectiveDate(row.base_date, row.scheduled_on, row.ingest_id)
+	};
 }
 
 export function currentToday(userId: string): TodayView | null {
@@ -397,7 +554,7 @@ export function currentToday(userId: string): TodayView | null {
 export function currentWeek(userId: string): { intro: string; items: WeekItemView[] } {
 	const rows = db()
 		.prepare(
-			`SELECT ingest_id, lead, title, detail, meta, status_label, status_tone, done, guide_json
+			`SELECT ingest_id, lead, title, detail, meta, status_label, status_tone, done, guide_json, base_date, scheduled_on
        FROM week_item WHERE user_id = ? AND is_current = 1 ORDER BY sort_order ASC`
 		)
 		.all(userId) as {
@@ -410,6 +567,8 @@ export function currentWeek(userId: string): { intro: string; items: WeekItemVie
 		status_tone: string | null;
 		done: number;
 		guide_json: string | null;
+		base_date: string | null;
+		scheduled_on: string | null;
 	}[];
 	return {
 		intro: getMeta(userId, 'week_intro'),
@@ -421,9 +580,39 @@ export function currentWeek(userId: string): { intro: string; items: WeekItemVie
 			meta: row.meta,
 			status: row.status_label ? { label: row.status_label, tone: row.status_tone ?? 'default' } : null,
 			done: row.done === 1,
-			duration: readGuide(row.guide_json)?.duration ?? null
+			duration: readGuide(row.guide_json)?.duration ?? null,
+			date: effectiveDate(row.base_date, row.scheduled_on, row.ingest_id)
 		}))
 	};
+}
+
+export function scheduledTodos(userId: string): { id: string; text: string; done: boolean; date: string; order: number }[] {
+	const rows = db()
+		.prepare(
+			`SELECT id, text, done, base_date, scheduled_on, sort_order
+       FROM todo WHERE user_id = ? AND archived = 0 ORDER BY sort_order ASC, id ASC`
+		)
+		.all(userId) as {
+		id: string;
+		text: string;
+		done: number;
+		base_date: string | null;
+		scheduled_on: string | null;
+		sort_order: number;
+	}[];
+	const dated: { id: string; text: string; done: boolean; date: string; order: number }[] = [];
+	for (const row of rows) {
+		const date = effectiveDate(row.base_date, row.scheduled_on, row.id);
+		if (!date) continue;
+		dated.push({
+			id: row.id,
+			text: row.text,
+			done: row.done === 1,
+			date,
+			order: 1000 + row.sort_order
+		});
+	}
+	return dated;
 }
 
 export function currentTodos(userId: string): { intro: string; items: TodoView[] } {
@@ -582,6 +771,45 @@ export function toggleChecklist(
 	return { id: row.id, parent_id: parentId, done: done === 1, done_at: doneAt };
 }
 
+export function saveStepComment(
+	userId: string,
+	parentKind: 'todo' | 'week',
+	parentId: string,
+	index: number,
+	text: string
+): { step: { index: number; comment: string; updated_at: string } | null } | null {
+	const task = getTask(userId, parentKind, parentId);
+	const steps = task?.guide?.steps ?? [];
+	if (!task || index < 0 || index >= steps.length) return null;
+	const trimmed = text.trim();
+	if (!trimmed) {
+		db()
+			.prepare(
+				`DELETE FROM step_comment
+         WHERE user_id = ? AND parent_kind = ? AND parent_id = ? AND step_index = ?`
+			)
+			.run(userId, parentKind, parentId, index);
+		return { step: null };
+	}
+	const at = nowIso();
+	db()
+		.prepare(
+			`INSERT INTO step_comment (user_id, parent_kind, parent_id, step_index, text, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id, parent_kind, parent_id, step_index) DO UPDATE SET
+         text = excluded.text,
+         updated_at = excluded.updated_at`
+		)
+		.run(userId, parentKind, parentId, index, trimmed, at);
+	return {
+		step: {
+			index,
+			comment: trimmed,
+			updated_at: formatInZone(Date.parse(at), timeZone())
+		}
+	};
+}
+
 export type AnswerRecord = {
 	id: string;
 	title: string;
@@ -689,6 +917,9 @@ export function exportAll(userId: string): Record<string, unknown> {
 	const checklist = db()
 		.prepare('SELECT * FROM checklist WHERE user_id = ? ORDER BY parent_kind, parent_id, sort_order')
 		.all(userId);
+	const stepComments = db()
+		.prepare('SELECT * FROM step_comment WHERE user_id = ? ORDER BY parent_kind, parent_id, step_index')
+		.all(userId);
 	const planPhases = db().prepare('SELECT * FROM plan_phase WHERE user_id = ? ORDER BY sort_order').all(userId);
 	const planMilestones = db()
 		.prepare('SELECT * FROM plan_milestone WHERE user_id = ? ORDER BY phase_id, sort_order')
@@ -707,6 +938,7 @@ export function exportAll(userId: string): Record<string, unknown> {
 		week,
 		todos,
 		checklist,
+		step_comments: stepComments,
 		plan_phases: planPhases,
 		plan_milestones: planMilestones,
 		study,
@@ -719,6 +951,7 @@ export function exportAll(userId: string): Record<string, unknown> {
 export function deleteUserData(userId: string, keepPasskey: boolean): void {
 	const tx = db().transaction(() => {
 		for (const table of [
+			'step_comment',
 			'decision_event',
 			'decision',
 			'study_block',

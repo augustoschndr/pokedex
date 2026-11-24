@@ -1,4 +1,4 @@
-import { MANIFEST_CACHE, MANIFEST_CDN_CACHE, versionedIcon } from '$lib/icons';
+import { applyNoStore, versionedIcon } from '$lib/icons';
 import { manifestColors, parseTheme } from '$lib/theme';
 import type { RequestHandler } from './$types';
 
@@ -24,12 +24,10 @@ export const GET: RequestHandler = ({ cookies }) => {
 		lang: 'en',
 		icons
 	};
-	return new Response(JSON.stringify(manifest), {
-		headers: {
-			'content-type': 'application/manifest+json; charset=utf-8',
-			'cache-control': MANIFEST_CACHE,
-			'cdn-cache-control': MANIFEST_CDN_CACHE,
-			vary: 'Cookie'
-		}
+	const headers = new Headers({
+		'content-type': 'application/manifest+json; charset=utf-8',
+		vary: 'Cookie'
 	});
+	applyNoStore(headers);
+	return new Response(JSON.stringify(manifest), { headers });
 };

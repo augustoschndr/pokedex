@@ -1,4 +1,4 @@
-const CACHE = 'pokedex-v9';
+const CACHE = 'pokedex-v10';
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(self.skipWaiting());

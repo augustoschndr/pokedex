@@ -68,6 +68,19 @@ const blockGroupSchema = z.object({
 	blocks: z.array(studyBlockSchema).max(80)
 });
 
+const day = z
+	.string()
+	.regex(/^\d{4}-\d{2}-\d{2}$/)
+	.refine((value) => {
+		const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+		if (!match) return false;
+		const y = Number(match[1]);
+		const m = Number(match[2]);
+		const d = Number(match[3]);
+		const date = new Date(Date.UTC(y, m - 1, d));
+		return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+	}, 'use a real YYYY-MM-DD date');
+
 const httpUrl = z
 	.string()
 	.max(2000)
@@ -182,6 +195,7 @@ export const ingestSchema = z.object({
 				.array(
 					z.object({
 						id: id,
+						date: day.optional(),
 						lead: text.optional(),
 						title: text,
 						detail: text.optional(),
@@ -205,6 +219,7 @@ export const ingestSchema = z.object({
 				.array(
 					z.object({
 						id: id,
+						date: day.optional(),
 						text: text,
 						meta: text.optional(),
 						done: z.boolean().optional(),
