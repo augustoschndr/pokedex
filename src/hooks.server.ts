@@ -83,8 +83,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// SvelteKit rejects as a cross-site form submission.
 	response.headers.set('referrer-policy', 'same-origin');
 	response.headers.set('x-frame-options', 'DENY');
-	// Same-origin camera and microphone so the teleprompter can preview and record.
-	// The take never leaves the phone. Location stays blocked.
-	response.headers.set('permissions-policy', 'camera=(self), microphone=(self), geolocation=()');
+	// Camera, microphone, and location stay blocked.
+	response.headers.set('permissions-policy', 'camera=(), microphone=(), geolocation=()');
 	return response;
 };

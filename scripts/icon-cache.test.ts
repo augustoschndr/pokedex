@@ -45,7 +45,7 @@ test('committed touch icon is a 180px png outside the static directory', () => {
 
 test('the service worker does not cache-first icons and names the new artwork', () => {
 	const worker = fs.readFileSync('src/lib/pwa/service-worker.js', 'utf8');
-	assert.match(worker, /const CACHE = 'pokedex-v10'/);
+	assert.match(worker, /const CACHE = 'pokedex-v11'/);
 	assert.match(worker, /const immutable = url\.pathname\.startsWith\('\/_app\/immutable\/'\);/);
 	assert.match(worker, /pathname\.startsWith\('\/icons\/'\)/);
 	assert.match(worker, /pathname === '\/apple-touch-icon\.png'/);
