@@ -540,7 +540,7 @@ try {
 	await page.waitForTimeout(400);
 	await page.getByRole('button', { name: /Stop recording/ }).click();
 	await page.getByRole('button', { name: 'Save to Photos' }).waitFor();
-	await page.getByText('Tap Save Video to keep it in Photos').waitFor();
+	await page.getByText('Tap Save Video to put it in Photos').waitFor();
 	await shot(page, 'task-save');
 	await page.getByRole('button', { name: 'Discard' }).click();
 	await page.getByRole('button', { name: 'Close' }).click();
