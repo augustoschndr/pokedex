@@ -4,11 +4,13 @@ import { test } from 'node:test';
 import {
 	ICON_REV,
 	MANIFEST_CACHE,
+	NO_STORE,
 	ROOT_TOUCH_CACHE,
 	VERSIONED_CACHE,
 	appleTouchHref,
 	isPublicIconPath,
 	manifestHref,
+	uncachedDocument,
 	versionedIcon
 } from '../src/lib/icons.ts';
 
@@ -24,7 +26,12 @@ test('icon urls carry the revision and the root probes stay public', () => {
 	assert.equal(isPublicIconPath('/today'), false);
 	assert.match(VERSIONED_CACHE, /immutable/);
 	assert.match(ROOT_TOUCH_CACHE, /max-age=300/);
-	assert.match(MANIFEST_CACHE, /max-age=0/);
+	assert.equal(MANIFEST_CACHE, NO_STORE);
+	assert.equal(uncachedDocument('/service-worker.js', 'application/javascript'), true);
+	assert.equal(uncachedDocument('/manifest.webmanifest', null), true);
+	assert.equal(uncachedDocument('/today', 'text/html; charset=utf-8'), true);
+	assert.equal(uncachedDocument('/_app/immutable/chunks/app.js', 'text/javascript'), false);
+	assert.equal(uncachedDocument('/icons/icon-192-v4.png', 'image/png'), false);
 });
 
 test('committed touch icon is a 180px png outside the static directory', () => {
@@ -37,7 +44,7 @@ test('committed touch icon is a 180px png outside the static directory', () => {
 });
 
 test('the service worker does not cache-first icons and names the new artwork', () => {
-	const worker = fs.readFileSync('static/service-worker.js', 'utf8');
+	const worker = fs.readFileSync('src/lib/pwa/service-worker.js', 'utf8');
 	assert.match(worker, /const CACHE = 'pokedex-v10'/);
 	assert.match(worker, /const immutable = url\.pathname\.startsWith\('\/_app\/immutable\/'\);/);
 	assert.match(worker, /pathname\.startsWith\('\/icons\/'\)/);

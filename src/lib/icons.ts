@@ -14,10 +14,28 @@ export const VERSIONED_CACHE = 'public, max-age=31536000, immutable';
  */
 export const ROOT_TOUCH_CACHE = 'public, max-age=300, must-revalidate';
 
-/** The manifest URL is stable, so the document itself must revalidate. */
-export const MANIFEST_CACHE = 'private, max-age=0, must-revalidate';
+/**
+ * Stable URLs: HTML, the manifest, and the service worker.
+ * Without this, Cloudflare keeps a copy for four hours.
+ * A Cache Rule that ignores origin cache headers can still override it.
+ */
+export const NO_STORE = 'no-cache, no-store, must-revalidate';
 
-export const MANIFEST_CDN_CACHE = 'private, max-age=0';
+export const MANIFEST_CACHE = NO_STORE;
+
+export const MANIFEST_CDN_CACHE = 'no-store';
+
+export function uncachedDocument(pathname: string, contentType: string | null): boolean {
+	if (pathname.startsWith('/_app/immutable/')) return false;
+	if (pathname === '/service-worker.js' || pathname === '/manifest.webmanifest') return true;
+	return (contentType ?? '').toLowerCase().startsWith('text/html');
+}
+
+export function applyNoStore(headers: Headers): void {
+	headers.set('cache-control', NO_STORE);
+	headers.set('cdn-cache-control', MANIFEST_CDN_CACHE);
+	headers.set('cloudflare-cdn-cache-control', MANIFEST_CDN_CACHE);
+}
 
 export const ROOT_TOUCH_PATHS = ['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'] as const;
 

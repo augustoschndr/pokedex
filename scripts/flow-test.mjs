@@ -162,7 +162,9 @@ try {
 	check(!String(oldTouch.headers.get('location') || '').includes('login'), 'old touch icon does not redirect to login');
 	const manifestRes = await raw('/manifest.webmanifest');
 	check(manifestRes.status === 200, 'manifest is public');
-	check(manifestRes.headers.get('cache-control') === 'private, max-age=0, must-revalidate', 'manifest revalidates');
+	check(manifestRes.headers.get('cache-control') === 'no-cache, no-store, must-revalidate', 'manifest is not cached');
+	check(manifestRes.headers.get('cdn-cache-control') === 'no-store', 'manifest cdn cache');
+	check(manifestRes.headers.get('cloudflare-cdn-cache-control') === 'no-store', 'manifest cloudflare cache');
 	const manifest = JSON.parse(manifestRes.buf.toString('utf8'));
 	check(manifest.background_color === '#FBF7F3' && manifest.theme_color === '#FBF7F3', 'manifest background defaults to light');
 	check(
@@ -173,6 +175,37 @@ try {
 	const login = await raw('/login');
 	const loginHtml = login.buf.toString('utf8');
 	check(login.status === 200, 'login page');
+	check(login.headers.get('cache-control') === 'no-cache, no-store, must-revalidate', 'html is not cached');
+	check(login.headers.get('cdn-cache-control') === 'no-store', 'html cdn cache');
+	check(login.headers.get('cloudflare-cdn-cache-control') === 'no-store', 'html cloudflare cache');
+	const sw = await raw('/service-worker.js');
+	check(sw.status === 200 && sw.buf.toString('utf8').includes("const CACHE = 'pokedex-v10'"), 'service worker is served');
+	check(sw.headers.get('cache-control') === 'no-cache, no-store, must-revalidate', 'service worker is not cached');
+	check(sw.headers.get('cdn-cache-control') === 'no-store', 'service worker cdn cache');
+	check(sw.headers.get('cloudflare-cdn-cache-control') === 'no-store', 'service worker cloudflare cache');
+	const immutableFile = (() => {
+		const base = path.join(root, 'build/client/_app/immutable');
+		const stack = [base];
+		while (stack.length) {
+			const dir = stack.pop();
+			for (const name of fs.readdirSync(dir)) {
+				const full = path.join(dir, name);
+				if (fs.statSync(full).isDirectory()) stack.push(full);
+				else if (!name.endsWith('.map')) return full;
+			}
+		}
+		return null;
+	})();
+	check(immutableFile != null, 'build has an immutable asset');
+	if (immutableFile) {
+		const rel =
+			'/' + path.relative(path.join(root, 'build/client'), immutableFile).split(path.sep).join('/');
+		const hashed = await raw(rel);
+		check(
+			hashed.status === 200 && hashed.headers.get('cache-control') === 'public,max-age=31536000,immutable',
+			`immutable asset stays cached (${hashed.headers.get('cache-control')})`
+		);
+	}
 	check(loginHtml.includes('href="/icons/apple-touch-icon-v4.png"'), 'login head links the versioned touch icon');
 	check(loginHtml.includes('sizes="180x180"'), 'touch icon declares 180');
 	check(loginHtml.includes('href="/manifest.webmanifest?v=v4"'), 'manifest link is versioned');
