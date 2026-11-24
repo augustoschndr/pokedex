@@ -1,45 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import {
-		SPEED_KEY,
-		cameraErrorMessage,
-		clampSpeed,
-		formatClock,
-		micErrorMessage,
-		pickRecorderMime,
-		shareRecording,
-		takeFromChunks
-	} from '$lib/prompter';
+	import { SPEED_KEY, clampSpeed } from '$lib/prompter';
 
 	let { title, text, onclose }: { title: string; text: string; onclose: () => void } = $props();
 
 	const sizes = [28, 34, 40, 48, 56];
 
 	let scroller = $state<HTMLDivElement | null>(null);
-	let videoEl = $state<HTMLVideoElement | null>(null);
 	let speed = $state(48);
 	let sizeIndex = $state(2);
 	let mirror = $state(false);
 	let phase = $state<'count' | 'play' | 'pause'>('count');
 	let count = $state(3);
-	let cameraOn = $state(false);
-	let cameraReady = $state(false);
-	let cameraError = $state('');
-	let recordError = $state('');
-	let recording = $state(false);
-	let recordMs = $state(0);
-	let savedUrl = $state<string | null>(null);
-	let savedName = $state('');
-	let saveOffer = $state(false);
-	let stream = $state<MediaStream | null>(null);
 
 	let countTimer = 0;
-	let recorder: MediaRecorder | null = null;
-	let audioStream: MediaStream | null = null;
-	let savedFile: File | null = null;
-	let chunks: Blob[] = [];
-	let chosenMime = '';
-	let arming = false;
 	let disposed = false;
 	let tapX = 0;
 	let tapY = 0;
@@ -96,222 +70,10 @@
 		togglePlay();
 	}
 
-	function stopAudio() {
-		for (const track of audioStream?.getTracks() ?? []) track.stop();
-		audioStream = null;
-	}
-
-	function stopVideo() {
-		for (const track of stream?.getTracks() ?? []) track.stop();
-		stream = null;
-		cameraReady = false;
-	}
-
-	function discardTake() {
-		if (savedUrl) URL.revokeObjectURL(savedUrl);
-		savedUrl = null;
-		savedFile = null;
-		savedName = '';
-		saveOffer = false;
-	}
-
-	function holdTake(file: File) {
-		discardTake();
-		savedFile = file;
-		savedName = file.name;
-		savedUrl = URL.createObjectURL(file);
-	}
-
-	function offerShare(file: File, fromTap: boolean) {
-		holdTake(file);
-		if (!fromTap) {
-			saveOffer = true;
-			return;
-		}
-		const payload = { files: [file], title };
-		const canShare = navigator.canShare;
-		const share = navigator.share;
-		if (typeof share !== 'function' || (typeof canShare === 'function' && !canShare(payload))) {
-			saveOffer = true;
-			return;
-		}
-		// Still inside the Stop tap. Do not await before share, or iOS drops the gesture.
-		void shareRecording(file, (data) => share.call(navigator, data), (data) => canShare?.call(navigator, data) ?? true, title).then(
-			(outcome) => {
-				if (disposed || savedFile !== file) return;
-				if (outcome === 'shared') releaseTake();
-				else saveOffer = true;
-			}
-		);
-	}
-
-	function finishTake() {
-		const active = recorder;
-		recorder = null;
-		recording = false;
-		if (!active || active.state === 'inactive') {
-			stopAudio();
-			return;
-		}
-		try {
-			active.requestData();
-		} catch {
-			/* the timeslices already collected are enough */
-		}
-		try {
-			active.stop();
-		} catch {
-			/* already stopped */
-		}
-		const file = takeFromChunks(chunks, active.mimeType || chosenMime);
-		if (!file) return;
-		offerShare(file, true);
-	}
-
-	function stopRecorder(keepTake: boolean) {
-		if (keepTake) {
-			finishTake();
-			return;
-		}
-		const active = recorder;
-		recorder = null;
-		chunks = [];
-		recording = false;
-		if (!active || active.state === 'inactive') {
-			stopAudio();
-			return;
-		}
-		active.ondataavailable = null;
-		active.onstop = () => stopAudio();
-		try {
-			active.stop();
-		} catch {
-			stopAudio();
-		}
-	}
-
 	function cleanup() {
 		if (disposed) return;
 		disposed = true;
 		window.clearTimeout(countTimer);
-		stopRecorder(false);
-		stopVideo();
-		discardTake();
-	}
-
-	async function toggleCamera() {
-		recordError = '';
-		if (cameraOn) {
-			stopRecorder(false);
-			stopVideo();
-			cameraOn = false;
-			cameraError = '';
-			return;
-		}
-		cameraOn = true;
-		cameraError = '';
-		cameraReady = false;
-		if (!navigator.mediaDevices?.getUserMedia) {
-			cameraError = 'This browser cannot open the camera.';
-			return;
-		}
-		try {
-			stream = await navigator.mediaDevices.getUserMedia({
-				video: { facingMode: 'user' },
-				audio: false
-			});
-		} catch (error) {
-			const name = error instanceof DOMException ? error.name : '';
-			cameraError = cameraErrorMessage(name);
-			stream = null;
-		}
-	}
-
-	async function toggleRecord() {
-		if (recording) {
-			stopRecorder(true);
-			return;
-		}
-		if (arming || !stream) return;
-		recordError = '';
-		if (typeof MediaRecorder === 'undefined') {
-			recordError = 'This browser cannot record video.';
-			return;
-		}
-		arming = true;
-		try {
-			const audio = await navigator.mediaDevices.getUserMedia({ audio: true });
-			const mime = pickRecorderMime((type) => MediaRecorder.isTypeSupported(type));
-			const mixed = new MediaStream([...stream.getVideoTracks(), ...audio.getAudioTracks()]);
-			let rec: MediaRecorder;
-			try {
-				rec = new MediaRecorder(mixed, mime ? { mimeType: mime } : undefined);
-			} catch {
-				for (const track of audio.getTracks()) track.stop();
-				recordError = 'This browser cannot record video.';
-				return;
-			}
-			chunks = [];
-			chosenMime = mime;
-			rec.ondataavailable = (event) => {
-				if (event.data.size > 0) chunks.push(event.data);
-			};
-			rec.onstop = () => {
-				stopAudio();
-				if (disposed || savedFile) return;
-				recording = false;
-				const file = takeFromChunks(chunks, rec.mimeType || chosenMime);
-				if (!file) return;
-				offerShare(file, false);
-			};
-			rec.start(500);
-			recorder = rec;
-			audioStream = audio;
-			recording = true;
-			recordMs = 0;
-		} catch (error) {
-			const name = error instanceof DOMException ? error.name : '';
-			recordError = micErrorMessage(name);
-		} finally {
-			arming = false;
-		}
-	}
-
-	function releaseTake() {
-		discardTake();
-	}
-
-	function saveToPhotos() {
-		const file = savedFile;
-		const url = savedUrl;
-		if (!file || !url) return;
-		const payload = { files: [file], title };
-		const share = navigator.share;
-		if (typeof share !== 'function' || (typeof navigator.canShare === 'function' && !navigator.canShare(payload))) {
-			const link = document.createElement('a');
-			link.href = url;
-			link.download = file.name;
-			document.body.appendChild(link);
-			link.click();
-			link.remove();
-			window.setTimeout(() => {
-				if (savedUrl === url) releaseTake();
-			}, 1500);
-			return;
-		}
-		void share.call(navigator, payload).then(
-			() => {
-				if (!disposed) releaseTake();
-			},
-			(error: unknown) => {
-				if (error instanceof DOMException && error.name === 'AbortError') return;
-			}
-		);
-	}
-
-	function retake() {
-		releaseTake();
-		if (cameraOn && stream) void toggleRecord();
 	}
 
 	function close() {
@@ -364,7 +126,7 @@
 	});
 
 	$effect(() => {
-		if (!playing && !recording) return;
+		if (!playing) return;
 		if (!('wakeLock' in navigator)) return;
 		let sentinel: WakeLockSentinel | null = null;
 		let cancelled = false;
@@ -386,47 +148,9 @@
 			void sentinel?.release().catch(() => undefined);
 		};
 	});
-
-	$effect(() => {
-		const node = videoEl;
-		const media = stream;
-		if (!node) return;
-		node.srcObject = media;
-		if (!media) return;
-		void node.play().catch(() => undefined);
-	});
-
-	$effect(() => {
-		if (!recording) return;
-		const started = performance.now();
-		let frame = 0;
-		const step = (now: number) => {
-			recordMs = now - started;
-			frame = requestAnimationFrame(step);
-		};
-		frame = requestAnimationFrame(step);
-		return () => cancelAnimationFrame(frame);
-	});
 </script>
 
-<div class="prompter" class:camera={cameraOn} class:is-mirror={mirror} role="dialog" aria-modal="true" aria-label="Script">
-	{#if cameraOn}
-		<div class="prompter-placeholder" aria-hidden="true"><span></span></div>
-		{#if stream}
-			<video
-				class="prompter-camera"
-				class:is-ready={cameraReady}
-				autoplay
-				playsinline
-				muted
-				bind:this={videoEl}
-				onloadeddata={() => (cameraReady = true)}
-			></video>
-		{/if}
-		<div class="prompter-scrim"></div>
-		<div class="prompter-gap"></div>
-	{/if}
-
+<div class="prompter" class:is-mirror={mirror} role="dialog" aria-modal="true" aria-label="Script">
 	<div class="prompter-bar">
 		<div class="prompter-row">
 			<button class="text-btn" type="button" onclick={close}>Close</button>
@@ -446,35 +170,6 @@
 					<path d="M4 9a5 5 0 1 0 1.2-3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
 					<path d="M4 3.5V6.2h2.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
 				</svg>
-			</button>
-			<span class="prompter-spacer"></span>
-			<button
-				class="prompter-icon"
-				type="button"
-				aria-pressed={cameraOn}
-				aria-label={cameraOn ? 'Hide camera' : 'Show camera'}
-				onclick={toggleCamera}
-			>
-				<svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-					<rect x="2.5" y="5" width="15" height="11" rx="2.5" stroke="currentColor" stroke-width="1.5" />
-					<circle cx="10" cy="10.5" r="2.6" stroke="currentColor" stroke-width="1.5" />
-				</svg>
-			</button>
-			<button
-				class="prompter-icon"
-				class:is-rec={recording}
-				type="button"
-				aria-pressed={recording}
-				aria-label={recording ? `Stop recording, ${formatClock(recordMs)}` : 'Record'}
-				disabled={!stream}
-				onclick={toggleRecord}
-			>
-				{#if recording}
-					<span class="rec-dot" aria-hidden="true"></span>
-					<span class="rec-time">{formatClock(recordMs)}</span>
-				{:else}
-					<span class="rec-idle" aria-hidden="true"></span>
-				{/if}
 			</button>
 		</div>
 		<div class="prompter-row">
@@ -520,17 +215,4 @@
 			</div>
 		{/if}
 	</div>
-
-	{#if cameraError}<p class="prompter-camera-note" role="alert">{cameraError}</p>{/if}
-	{#if recordError}<p class="prompter-note" role="alert">{recordError}</p>{/if}
-	{#if savedUrl && saveOffer}
-		<div class="prompter-save" role="status">
-			<p>Tap Save Video to put it in Photos</p>
-			<button class="pill" type="button" onclick={saveToPhotos}>Save to Photos</button>
-			<div class="prompter-save-actions">
-				<button class="text-btn" type="button" onclick={retake}>Retake</button>
-				<button class="text-btn" type="button" onclick={releaseTake}>Discard</button>
-			</div>
-		</div>
-	{/if}
 </div>

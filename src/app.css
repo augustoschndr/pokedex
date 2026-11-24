@@ -673,16 +673,12 @@ a.stretch:focus-visible { outline: none; }
 	touch-action: manipulation;
 }
 .prompter-bar,
-.prompter-stage,
-.prompter-camera-note,
-.prompter-note,
-.prompter-save {
+.prompter-stage {
 	position: relative;
 	z-index: 2;
 }
 .prompter-bar { display: flex; flex-direction: column; flex: none; }
 .prompter-row { display: flex; align-items: center; gap: 2px; min-height: 44px; }
-.prompter-spacer { flex: 1; }
 .prompter .text-btn { color: inherit; padding-left: 0; padding-right: 8px; }
 .prompter-icon {
 	width: 44px;
@@ -696,12 +692,7 @@ a.stretch:focus-visible { outline: none; }
 	flex: none;
 }
 .prompter-icon:disabled { opacity: 0.38; }
-.prompter-icon.is-rec { width: auto; min-width: 44px; padding: 0 8px; gap: 6px; display: inline-flex; }
 .prompter-size { font-weight: 600; font-size: 15px; }
-.rec-idle, .rec-dot { width: 14px; height: 14px; border-radius: 999px; box-sizing: border-box; }
-.rec-idle { border: 2px solid currentColor; }
-.rec-dot { background: var(--danger); }
-.rec-time { font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 600; }
 .prompter-speed { flex: 1; display: flex; align-items: center; min-width: 0; min-height: 44px; }
 .prompter-speed input {
 	width: 100%;
@@ -748,75 +739,6 @@ a.stretch:focus-visible { outline: none; }
 	font-weight: 600;
 	line-height: 1;
 }
-.prompter-placeholder {
-	position: absolute;
-	inset: 0;
-	z-index: 0;
-	background:
-		radial-gradient(circle at 50% 14%, rgba(255, 255, 255, 0.1), transparent 26%),
-		#1c1916;
-}
-.prompter-placeholder span {
-	position: absolute;
-	left: 50%;
-	top: 14%;
-	width: 72px;
-	height: 72px;
-	transform: translate(-50%, -50%);
-	border: 1px solid rgba(255, 255, 255, 0.18);
-	border-radius: 999px;
-}
-.prompter-camera {
-	position: absolute;
-	inset: 0;
-	z-index: 0;
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	opacity: 0;
-	transform: scaleX(-1);
-}
-.prompter-camera.is-ready { opacity: 1; }
-.prompter-scrim {
-	position: absolute;
-	inset: 0;
-	z-index: 1;
-	pointer-events: none;
-	background: linear-gradient(to bottom, rgba(16, 14, 12, 0.78) 0%, rgba(16, 14, 12, 0.62) 36%, rgba(16, 14, 12, 0.28) 58%, rgba(16, 14, 12, 0.16) 100%);
-}
-.prompter-gap { display: none; }
-.prompter.camera { background: #100e0c; color: #f6f1ea; }
-.prompter.camera .prompter-stage { order: 0; flex: none; height: 42%; }
-.prompter.camera .prompter-gap { display: block; order: 1; flex: 1; min-height: 12px; }
-.prompter.camera .prompter-camera-note,
-.prompter.camera .prompter-note,
-.prompter.camera .prompter-save,
-.prompter.camera .prompter-bar { order: 2; }
-.prompter.camera .prompter-guide { background: rgba(246, 241, 234, 0.72); }
-.prompter.camera .kicker { color: rgba(246, 241, 234, 0.78); }
-.prompter.camera .prompter-text { text-shadow: 0 1px 10px rgba(0, 0, 0, 0.55); }
-.prompter.camera .prompter-speed input { accent-color: #f6f1ea; }
-.prompter-camera-note, .prompter-note {
-	margin: 8px 0 0;
-	font-size: 15px;
-	line-height: 1.4;
-}
-.prompter-save {
-	display: flex;
-	flex-direction: column;
-	align-items: stretch;
-	gap: 10px;
-	margin-top: 8px;
-	padding: 14px;
-	background: var(--card);
-	color: var(--ink);
-	border: var(--hairline) solid var(--line);
-	border-radius: 16px;
-}
-.prompter-save p { font-size: 15px; line-height: 1.35; }
-.prompter-save .pill { min-height: 52px; font-size: 17px; }
-.prompter-save-actions { display: flex; gap: 8px; }
-.prompter-save-actions .text-btn { flex: 1; min-height: 44px; text-align: center; }
 @keyframes prompter-count {
 	from { opacity: 0; transform: scale(0.92); }
 	to { opacity: 1; transform: none; }
