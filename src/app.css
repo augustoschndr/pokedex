@@ -344,6 +344,12 @@ input.step-note { min-height: 40px; margin-top: 8px; padding: 8px 12px; font-siz
 	align-items: flex-start;
 	justify-content: space-between;
 }
+.week-top { gap: 12px; }
+.week-top > :first-child { flex: 1; min-width: 0; overflow-wrap: break-word; }
+.chip.count, .count {
+	white-space: nowrap;
+	flex-shrink: 0;
+}
 .lead { font-weight: 600; font-size: 14px; }
 .todo { position: relative; padding: 4px 0; border-top: 1px solid var(--line-soft); }
 .todo:first-child { border-top: 0; }

@@ -12,6 +12,18 @@ const FRAME_STAGES: { test: RegExp; stage: string }[] = [
 	{ test: /\b(?:growth|motion|reputation)\b/, stage: 'Motion/Reputation' }
 ];
 
+/**
+ * Drop a leading "PhaseName:" so a title does not repeat the FRAME pill.
+ * An optional "1. " stays. Stored ingest text is not changed.
+ */
+export function phaseLabel(title: string | null | undefined): string {
+	if (!title) return '';
+	const match = /^(\d+\.\s+)?[^:]+:\s*(.*)$/.exec(title);
+	if (!match || !match[2]) return title;
+	const rest = match[2];
+	return `${match[1] ?? ''}${rest.charAt(0).toUpperCase()}${rest.slice(1)}`;
+}
+
 export function frameStage(phaseTitle: string | null | undefined): string | null {
 	if (!phaseTitle) return null;
 	const name = phaseTitle
