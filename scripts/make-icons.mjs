@@ -64,4 +64,36 @@ render('favicon-32.png', 32, light);
 render('favicon-32-dark.png', 32, dark);
 render('apple-touch-icon-dark.png', 180, dark);
 
+const startupDir = path.resolve('src/lib/brand/startup');
+fs.mkdirSync(startupDir, { recursive: true });
+
+function startupSvg(width, height, status, bg, ink) {
+	const mark = Math.round(Math.min(width, height) * 0.16);
+	const scale = mark / 128;
+	const x = (width - mark) / 2;
+	const y = (height + status - mark) / 2;
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect width="${width}" height="${height}" fill="${bg}"/>
+  <g transform="translate(${x} ${y}) scale(${scale})" fill="none" stroke="${ink}" stroke-width="4.75" stroke-linecap="round" stroke-linejoin="round">
+    ${markShapes}
+  </g>
+</svg>`;
+}
+
+function renderStartup(name, width, height, status, bg, ink) {
+	const resvg = new Resvg(startupSvg(width, height, status, bg, ink), {
+		fitTo: { mode: 'width', value: width },
+		background: bg
+	});
+	const rendered = resvg.render();
+	if (rendered.width !== width || rendered.height !== height) {
+		throw new Error(`${name} rendered ${rendered.width}x${rendered.height}`);
+	}
+	fs.writeFileSync(path.join(startupDir, name), rendered.asPng());
+}
+
+renderStartup('startup-750x1334.png', 750, 1334, 40, light.bg, light.ink);
+renderStartup('startup-750x1334-dark.png', 750, 1334, 40, dark.bg, dark.ink);
+
 console.log('icons written');

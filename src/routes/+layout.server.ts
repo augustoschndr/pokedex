@@ -2,12 +2,12 @@ import { currentDecisions, currentStudy, currentTodos, pendingDecisionCount } fr
 import { secureCookie } from '$lib/server/env';
 import { todayPage, weekPage } from '$lib/server/screens';
 import { userTheme } from '$lib/server/theme';
-import { THEME_COOKIE, type ThemeChoice } from '$lib/theme';
+import { THEME_COOKIE, themeForRequest } from '$lib/theme';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = ({ locals, cookies }) => {
 	const user = locals.user;
-	const theme: ThemeChoice = user ? userTheme(user.id) : 'system';
+	const theme = themeForRequest(user ? userTheme(user.id) : null, cookies.get(THEME_COOKIE));
 	cookies.set(THEME_COOKIE, theme, {
 		path: '/',
 		httpOnly: false,

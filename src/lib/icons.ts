@@ -15,9 +15,9 @@ export const VERSIONED_CACHE = 'public, max-age=31536000, immutable';
 export const ROOT_TOUCH_CACHE = 'public, max-age=300, must-revalidate';
 
 /** The manifest URL is stable, so the document itself must revalidate. */
-export const MANIFEST_CACHE = 'public, max-age=0, must-revalidate';
+export const MANIFEST_CACHE = 'private, max-age=0, must-revalidate';
 
-export const MANIFEST_CDN_CACHE = 'public, max-age=60';
+export const MANIFEST_CDN_CACHE = 'private, max-age=0';
 
 export const ROOT_TOUCH_PATHS = ['/apple-touch-icon.png', '/apple-touch-icon-precomposed.png'] as const;
 

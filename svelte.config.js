@@ -13,7 +13,7 @@ const config = {
 			mode: 'auto',
 			directives: {
 				'default-src': ['self'],
-				'script-src': ['self', 'sha256-/H23tS2ezndgNFVIh3duPX8QzGIzRmPgkQOWFh4pUGY='],
+				'script-src': ['self', 'sha256-wvzzTxhmardDbKd8CPlkIzpBKRKEYEOXOO6qoRkOijM='],
 				'style-src': ['self', 'unsafe-inline'],
 				'img-src': ['self', 'data:'],
 				'media-src': ['self', 'blob:', 'mediastream:'],

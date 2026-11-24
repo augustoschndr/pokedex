@@ -396,9 +396,21 @@ try {
 	if (frame.insidePager || !frame.barParent || frame.shellPosition !== 'fixed') {
 		throw new Error(`tab bar is not fixed to the shell (${JSON.stringify(frame)})`);
 	}
-	await page.mouse.move(layerBox.x + layerBox.width * 0.78, 260);
+	const drag = await page.evaluate(() => {
+		const width = window.innerWidth;
+		for (let y = 200; y < window.innerHeight - 96; y += 20) {
+			const hit = document.elementFromPoint(width * 0.78, y);
+			if (hit?.closest('a, button, input, textarea, select, .tabbar, .check')) continue;
+			return y;
+		}
+		return 200;
+	});
+	await page.mouse.move(layerBox.x + layerBox.width * 0.78, drag);
 	await page.mouse.down();
-	await page.mouse.move(layerBox.x + layerBox.width * 0.22, 262, { steps: 20 });
+	await page.mouse.move(layerBox.x + layerBox.width * 0.22, drag + 2, { steps: 20 });
+	await page.evaluate(
+		() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+	);
 	const barMid = await page.locator('.tabbar').boundingBox();
 	const swipeState = await page.evaluate(() => {
 		const layer = document.querySelector('.pager');
