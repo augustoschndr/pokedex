@@ -154,8 +154,9 @@ try {
 	check(!String(oldTouch.headers.get('location') || '').includes('login'), 'old touch icon does not redirect to login');
 	const manifestRes = await raw('/manifest.webmanifest');
 	check(manifestRes.status === 200, 'manifest is public');
-	check(manifestRes.headers.get('cache-control') === 'public, max-age=0, must-revalidate', 'manifest revalidates');
+	check(manifestRes.headers.get('cache-control') === 'private, max-age=0, must-revalidate', 'manifest revalidates');
 	const manifest = JSON.parse(manifestRes.buf.toString('utf8'));
+	check(manifest.background_color === '#FBF7F3' && manifest.theme_color === '#FBF7F3', 'manifest background defaults to light');
 	check(
 		manifest.icons.every((icon) => icon.src.includes('-v4.')),
 		'manifest icons are versioned'
@@ -168,8 +169,40 @@ try {
 	check(loginHtml.includes('sizes="180x180"'), 'touch icon declares 180');
 	check(loginHtml.includes('href="/manifest.webmanifest?v=v4"'), 'manifest link is versioned');
 	check(!loginHtml.includes('href="/icons/apple-touch-icon.png"'), 'login head dropped the old touch icon');
+	check(!loginHtml.includes('apple-touch-startup-image'), 'a system theme has no launch image');
+	const lightLogin = await fetch(origin + '/login', {
+		headers: { cookie: 'pokedex-theme=light' },
+		redirect: 'manual'
+	});
+	const lightHtml = await lightLogin.text();
+	const startup = lightHtml.match(/<link rel="apple-touch-startup-image"[^>]*>/g) || [];
+	check(lightLogin.status === 200 && startup.length === 1, 'light theme emits one startup image');
+	check(startup[0]?.includes('/icons/startup-750x1334-v4.png') === true, 'light startup image');
+	check(!startup[0]?.includes('prefers-color-scheme'), 'startup image ignores system dark mode');
+	check(lightHtml.includes('content="#FBF7F3"'), 'light theme-color');
+	const darkLogin = await fetch(origin + '/login', {
+		headers: { cookie: 'pokedex-theme=dark' },
+		redirect: 'manual'
+	});
+	const darkHtml = await darkLogin.text();
+	check(darkHtml.includes('/icons/startup-750x1334-dark-v4.png'), 'dark startup image');
+	check(darkHtml.includes('content="#1C1916"'), 'dark theme-color');
+	const darkManifestRes = await fetch(origin + '/manifest.webmanifest', {
+		headers: { cookie: 'pokedex-theme=dark' }
+	});
+	const darkManifest = await darkManifestRes.json();
+	check(
+		darkManifest.background_color === '#1C1916' && darkManifest.theme_color === '#1C1916',
+		'manifest colors follow the cookie'
+	);
+	check((darkManifestRes.headers.get('vary') || '').toLowerCase().includes('cookie'), 'manifest varies on the cookie');
 	const icon192 = await raw('/icons/icon-192-v4.png');
 	check(icon192.status === 200 && pngSize(icon192.buf).width === 192, 'manifest 192 icon');
+	const startupPng = await raw('/icons/startup-750x1334-v4.png');
+	check(
+		startupPng.status === 200 && pngSize(startupPng.buf).width === 750 && pngSize(startupPng.buf).height === 1334,
+		'SE launch image'
+	);
 
 	const denied = await api('/api/v1/ingest', { method: 'POST', bearer: 'nope', body: {} });
 	check(denied.status === 401, 'bad token is 401');

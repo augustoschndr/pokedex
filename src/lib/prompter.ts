@@ -4,9 +4,9 @@ export const SPEED_MAX = 120;
 export const SPEED_DEFAULT = 48;
 
 const MIME_TYPES = [
+	'video/mp4',
 	'video/mp4;codecs=avc1',
 	'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-	'video/mp4',
 	'video/webm;codecs=vp9,opus',
 	'video/webm;codecs=vp8,opus',
 	'video/webm'
@@ -19,9 +19,19 @@ export function clampSpeed(value: unknown): number {
 	return Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(raw)));
 }
 
-/** Prefer mp4 so an iPhone can save the take, then the common WebM types. */
+/** mp4 first. WebM is only for a browser that cannot record mp4 at all. */
+export function supportedRecorderMimes(supported: (type: string) => boolean): string[] {
+	return MIME_TYPES.filter((type) => {
+		try {
+			return supported(type);
+		} catch {
+			return false;
+		}
+	});
+}
+
 export function pickRecorderMime(supported: (type: string) => boolean): string {
-	return MIME_TYPES.find((type) => supported(type)) ?? '';
+	return supportedRecorderMimes(supported)[0] ?? '';
 }
 
 export function recordingExtension(mime: string): string {
@@ -56,8 +66,9 @@ export function takeFileName(when: Date, extension = 'mp4'): string {
 /** Build a file from timeslice chunks already in hand. An empty buffer is not a take. */
 export function takeFromChunks(chunks: Blob[], mime: string, when = new Date()): File | null {
 	if (!chunks.some((chunk) => chunk.size > 0)) return null;
-	const type = (mime || 'video/mp4').split(';')[0] || 'video/mp4';
-	const extension = type.includes('webm') ? 'webm' : 'mp4';
+	const webm = (mime || '').includes('webm');
+	const type = webm ? 'video/webm' : 'video/mp4';
+	const extension = webm ? 'webm' : 'mp4';
 	const blob = new Blob(chunks, { type });
 	if (blob.size === 0) return null;
 	return new File([blob], takeFileName(when, extension), { type });
@@ -75,9 +86,9 @@ export function shareRecording(
 	canShare?: (data: { files: File[]; title?: string }) => boolean,
 	title?: string
 ): Promise<ShareOutcome> {
-	const payload = { files: [file], title };
-	if (canShare && !canShare(payload)) return Promise.resolve('button');
+	const payload = title ? { files: [file], title } : { files: [file] };
 	try {
+		if (canShare && !canShare(payload)) return Promise.resolve('button');
 		return share(payload).then(
 			() => 'shared' as const,
 			(error: unknown) => {
