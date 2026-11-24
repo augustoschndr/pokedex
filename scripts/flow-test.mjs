@@ -179,7 +179,7 @@ try {
 	check(login.headers.get('cdn-cache-control') === 'no-store', 'html cdn cache');
 	check(login.headers.get('cloudflare-cdn-cache-control') === 'no-store', 'html cloudflare cache');
 	const sw = await raw('/service-worker.js');
-	check(sw.status === 200 && sw.buf.toString('utf8').includes("const CACHE = 'pokedex-v12'"), 'service worker is served');
+	check(sw.status === 200 && sw.buf.toString('utf8').includes("const CACHE = 'pokedex-v13'"), 'service worker is served');
 	check(sw.headers.get('cache-control') === 'no-cache, no-store, must-revalidate', 'service worker is not cached');
 	check(sw.headers.get('cdn-cache-control') === 'no-store', 'service worker cdn cache');
 	check(sw.headers.get('cloudflare-cdn-cache-control') === 'no-store', 'service worker cloudflare cache');

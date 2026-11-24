@@ -1,8 +1,10 @@
 <script lang="ts">
 	import Tags from '$lib/components/Tags.svelte';
+	import { frameStage, phaseLabel } from '$lib/frame';
 	import type { PlanPhaseView } from '$lib/server/content';
 
 	let { phase }: { phase: PlanPhaseView } = $props();
+	const frame = $derived(frameStage(phase.title));
 
 	function href(kind: 'todo' | 'week', id: string) {
 		return kind === 'todo' ? `/you/${encodeURIComponent(id)}` : `/week/${encodeURIComponent(id)}`;
@@ -11,8 +13,8 @@
 
 <article class="card" id="plan-{phase.id}">
 	<div class="week-top">
-		<h2>{phase.title}</h2>
-		<span class="chip">{phase.done} of {phase.total}</span>
+		<h2>{frame ? phaseLabel(phase.title) : phase.title}</h2>
+		<span class="chip count">{phase.done} of {phase.total}</span>
 	</div>
 	{#if phase.detail}<p class="meta" style="margin-top: 6px">{phase.detail}</p>{/if}
 	<div class="meter" aria-hidden="true">
@@ -32,7 +34,7 @@
 		<div class="milestone" id="plan-{milestone.id}">
 			<div class="week-top">
 				<p class="guide-title">{milestone.title}</p>
-				<span class="small muted">{milestone.done} of {milestone.total}</span>
+				<span class="small muted count">{milestone.done} of {milestone.total}</span>
 			</div>
 			{#if milestone.detail}<p class="small" style="margin-top: 4px">{milestone.detail}</p>{/if}
 			{#if milestone.tasks.length}

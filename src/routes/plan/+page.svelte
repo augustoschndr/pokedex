@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { frameStage } from '$lib/frame';
+	import { frameStage, phaseLabel } from '$lib/frame';
 
 	let { data } = $props();
 
@@ -26,8 +26,8 @@
 				{@const frame = frameStage(phase.title)}
 				<a class="card prep-link" href="/plan/{phase.id}">
 					<div class="week-top">
-						<h2>{phase.title}</h2>
-						<span class="chip">{phase.done} of {phase.total}</span>
+						<h2>{frame ? phaseLabel(phase.title) : phase.title}</h2>
+						<span class="chip count">{phase.done} of {phase.total}</span>
 					</div>
 					{#if frame}<div class="chips"><span class="chip">{frame}</span></div>{/if}
 					<div class="meter" aria-hidden="true">
