@@ -9,12 +9,9 @@ import maskable192 from '$lib/brand/icons/icon-maskable-192.png';
 import maskable512 from '$lib/brand/icons/icon-maskable-512.png';
 import iconSvg from '$lib/brand/icons/icon.svg';
 import iconSvgDark from '$lib/brand/icons/icon-dark.svg';
+import startupSe from '$lib/brand/startup/startup-750x1334.png';
+import startupSeDark from '$lib/brand/startup/startup-750x1334-dark.png';
 import { versionedIcon, VERSIONED_CACHE } from '$lib/icons';
-
-const startupFiles = import.meta.glob('$lib/brand/startup/*.png', {
-	eager: true,
-	import: 'default'
-}) as Record<string, string>;
 
 type IconAsset = { asset: string; type: string };
 
@@ -35,10 +32,8 @@ export const versionedIcons: Record<string, IconAsset> = Object.fromEntries([
 	entry('icon-maskable-512.png', maskable512, 'image/png'),
 	entry('icon.svg', iconSvg, 'image/svg+xml'),
 	entry('icon-dark.svg', iconSvgDark, 'image/svg+xml'),
-	...Object.entries(startupFiles).map(([filePath, asset]) => {
-		const file = filePath.split('/').pop() ?? '';
-		return entry(file, asset, 'image/png');
-	})
+	entry('startup-750x1334.png', startupSe, 'image/png'),
+	entry('startup-750x1334-dark.png', startupSeDark, 'image/png')
 ]);
 
 export function iconResponse(asset: string, cache: string, type?: string): Response {

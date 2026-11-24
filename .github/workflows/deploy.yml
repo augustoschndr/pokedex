@@ -1,0 +1,24 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy with Coolify
+        env:
+          COOLIFY_DEPLOY_WEBHOOK: ${{ secrets.COOLIFY_DEPLOY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_DEPLOY_WEBHOOK" ] || [ -z "$COOLIFY_TOKEN" ]; then
+            echo "::notice::Coolify deploy skipped. Add repository secrets COOLIFY_DEPLOY_WEBHOOK and COOLIFY_TOKEN."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --request POST \
+            --header "Authorization: Bearer ${COOLIFY_TOKEN}" \
+            "$COOLIFY_DEPLOY_WEBHOOK"

@@ -6,8 +6,9 @@
 		clampSpeed,
 		formatClock,
 		micErrorMessage,
-		pickRecorderMime,
-		recordingExtension
+		shareRecording,
+		supportedRecorderMimes,
+		takeFromChunks
 	} from '$lib/prompter';
 
 	let { title, text, onclose }: { title: string; text: string; onclose: () => void } = $props();
@@ -29,12 +30,16 @@
 	let recordMs = $state(0);
 	let savedUrl = $state<string | null>(null);
 	let savedName = $state('');
+	let saveOffer = $state(false);
+	let saveError = $state('');
 	let stream = $state<MediaStream | null>(null);
 
 	let countTimer = 0;
 	let recorder: MediaRecorder | null = null;
 	let audioStream: MediaStream | null = null;
 	let savedFile: File | null = null;
+	let chunks: Blob[] = [];
+	let chosenMime = '';
 	let arming = false;
 	let disposed = false;
 	let tapX = 0;
@@ -103,30 +108,78 @@
 		cameraReady = false;
 	}
 
-	function discardTake() {
+	function errorText(error: unknown, fallback: string): string {
+		if (error instanceof DOMException && error.name === 'AbortError') return '';
+		if (error instanceof Error && error.message) return error.message;
+		return fallback;
+	}
+
+	function releaseUrl() {
 		if (savedUrl) URL.revokeObjectURL(savedUrl);
 		savedUrl = null;
 		savedFile = null;
 		savedName = '';
 	}
 
-	function stopRecorder(keepTake: boolean) {
+	function discardTake() {
+		releaseUrl();
+		saveOffer = false;
+		saveError = '';
+	}
+
+	function holdTake(file: File) {
+		releaseUrl();
+		savedFile = file;
+		savedName = file.name;
+		savedUrl = URL.createObjectURL(file);
+	}
+
+	function finishTake() {
+		// Draw the sheet before stop. Asking iOS to flush first can swallow the stop event.
+		saveError = '';
+		saveOffer = true;
 		const active = recorder;
 		recorder = null;
+		recording = false;
 		if (!active || active.state === 'inactive') {
 			stopAudio();
-			recording = false;
+			if (!savedFile) saveError = 'This take was not recorded.';
 			return;
 		}
-		if (!keepTake) active.onstop = null;
+		try {
+			active.stop();
+		} catch (error) {
+			stopAudio();
+			saveError = errorText(error, 'The recording could not stop.');
+			return;
+		}
+		try {
+			const file = takeFromChunks(chunks, active.mimeType || chosenMime || 'video/mp4');
+			if (file) holdTake(file);
+		} catch (error) {
+			saveError = errorText(error, 'The recording could not be saved.');
+		}
+	}
+
+	function stopRecorder(keepTake: boolean) {
+		if (keepTake) {
+			finishTake();
+			return;
+		}
+		const active = recorder;
+		recorder = null;
+		chunks = [];
+		recording = false;
+		if (!active || active.state === 'inactive') {
+			stopAudio();
+			return;
+		}
+		active.ondataavailable = null;
+		active.onstop = () => stopAudio();
 		try {
 			active.stop();
 		} catch {
-			/* already stopped */
-		}
-		if (!keepTake) {
 			stopAudio();
-			recording = false;
 		}
 	}
 
@@ -181,34 +234,60 @@
 		arming = true;
 		try {
 			const audio = await navigator.mediaDevices.getUserMedia({ audio: true });
-			const mime = pickRecorderMime((type) => MediaRecorder.isTypeSupported(type));
 			const mixed = new MediaStream([...stream.getVideoTracks(), ...audio.getAudioTracks()]);
-			let rec: MediaRecorder;
+			let supported: (type: string) => boolean = () => false;
 			try {
-				rec = new MediaRecorder(mixed, mime ? { mimeType: mime } : undefined);
+				supported = (type) => MediaRecorder.isTypeSupported(type);
 			} catch {
+				supported = () => false;
+			}
+			const attempts = supportedRecorderMimes(supported);
+			const list = attempts.length ? attempts : [''];
+			let rec: MediaRecorder | null = null;
+			let lastError: unknown;
+			for (const mime of list) {
+				try {
+					rec = mime ? new MediaRecorder(mixed, { mimeType: mime }) : new MediaRecorder(mixed);
+					chosenMime = rec.mimeType || mime || 'video/mp4';
+					break;
+				} catch (error) {
+					lastError = error;
+					rec = null;
+				}
+			}
+			if (!rec) {
 				for (const track of audio.getTracks()) track.stop();
-				recordError = 'This browser cannot record video.';
+				recordError = errorText(lastError, 'This browser cannot record video.');
 				return;
 			}
-			const chunks: Blob[] = [];
+			chunks = [];
 			rec.ondataavailable = (event) => {
-				if (event.data.size > 0) chunks.push(event.data);
+				try {
+					if (event.data.size > 0) chunks.push(event.data);
+				} catch (error) {
+					saveOffer = true;
+					saveError = errorText(error, 'The recording could not be saved.');
+				}
 			};
 			rec.onstop = () => {
-				stopAudio();
-				if (disposed) return;
-				const type = (rec.mimeType || mime || 'video/mp4').split(';')[0] || 'video/mp4';
-				const blob = new Blob(chunks, { type });
-				const file = new File([blob], `pokedex-take.${recordingExtension(type)}`, { type });
-				discardTake();
-				savedFile = file;
-				savedName = file.name;
-				savedUrl = URL.createObjectURL(blob);
-				recording = false;
-				void shareTake(false);
+				try {
+					stopAudio();
+					if (disposed) return;
+					recording = false;
+					saveOffer = true;
+					const file = takeFromChunks(chunks, rec.mimeType || chosenMime || 'video/mp4');
+					if (!file) {
+						if (!savedFile) saveError = 'The recording was empty.';
+						return;
+					}
+					holdTake(file);
+					saveError = '';
+				} catch (error) {
+					saveOffer = true;
+					saveError = errorText(error, 'The recording could not be saved.');
+				}
 			};
-			rec.start(250);
+			rec.start(500);
 			recorder = rec;
 			audioStream = audio;
 			recording = true;
@@ -225,30 +304,31 @@
 		discardTake();
 	}
 
-	async function shareTake(fromUser: boolean) {
+	function saveToPhotos() {
 		const file = savedFile;
-		const url = savedUrl;
-		if (!file || !url) return;
-		const payload = { files: [file], title };
-		try {
-			if (navigator.canShare?.(payload)) {
-				await navigator.share(payload);
-				if (!disposed) releaseTake();
-				return;
-			}
-		} catch (error) {
-			if (error instanceof DOMException && (error.name === 'AbortError' || error.name === 'NotAllowedError')) return;
+		if (!file) {
+			saveError = 'The video is not ready yet.';
+			return;
 		}
-		if (!fromUser || disposed) return;
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = file.name;
-		document.body.appendChild(link);
-		link.click();
-		link.remove();
-		window.setTimeout(() => {
-			if (savedUrl === url) releaseTake();
-		}, 1500);
+		const share = navigator.share;
+		if (typeof share !== 'function') {
+			saveError = 'This browser has no share sheet. Use Download.';
+			return;
+		}
+		saveError = '';
+		try {
+			void shareRecording(
+				file,
+				(data) => share.call(navigator, data),
+				(data) => (typeof navigator.canShare === 'function' ? navigator.canShare(data) : true)
+			).then((outcome) => {
+				if (disposed || savedFile !== file) return;
+				if (outcome === 'shared') releaseTake();
+				else if (outcome === 'button') saveError = 'Photos cannot take this video. Use Download.';
+			});
+		} catch (error) {
+			saveError = errorText(error, 'The share sheet did not open.');
+		}
 	}
 
 	function retake() {
@@ -366,7 +446,38 @@
 			></video>
 		{/if}
 		<div class="prompter-scrim"></div>
-		<div class="prompter-gap"></div>
+	{/if}
+
+	<div class="prompter-stage">
+		<div class="prompter-guide" aria-hidden="true"></div>
+		<div class="prompter-scroll" bind:this={scroller}>
+			<div class="prompter-lead"></div>
+			<div class="prompter-pad">
+				<p class="kicker">{title}</p>
+				<p class="prompter-text" style:font-size="{size}px">{text}</p>
+			</div>
+			<div class="prompter-tail"></div>
+		</div>
+		{#if phase === 'count'}
+			<div class="prompter-count" aria-live="polite">
+				{#key count}<b>{count}</b>{/key}
+			</div>
+		{/if}
+	</div>
+
+	{#if cameraError}<p class="prompter-camera-note" role="alert">{cameraError}</p>{/if}
+	{#if recordError}<p class="prompter-note" role="alert">{recordError}</p>{/if}
+	{#if saveOffer}
+		<div class="prompter-save" role="status">
+			<p>Tap Save Video to put it in Photos</p>
+			{#if saveError}<p class="prompter-note" role="alert">{saveError}</p>{/if}
+			<button class="pill" type="button" onclick={saveToPhotos}>Save to Photos</button>
+			{#if savedUrl}<a class="prompter-download" href={savedUrl} download={savedName}>Download</a>{/if}
+			<div class="prompter-save-actions">
+				<button class="text-btn" type="button" onclick={retake}>Retake</button>
+				<button class="text-btn" type="button" onclick={releaseTake}>Discard</button>
+			</div>
+		</div>
 	{/if}
 
 	<div class="prompter-bar">
@@ -445,34 +556,4 @@
 			</label>
 		</div>
 	</div>
-
-	<div class="prompter-stage">
-		<div class="prompter-guide" aria-hidden="true"></div>
-		<div class="prompter-scroll" bind:this={scroller}>
-			<div class="prompter-lead"></div>
-			<div class="prompter-pad">
-				<p class="kicker">{title}</p>
-				<p class="prompter-text" style:font-size="{size}px">{text}</p>
-			</div>
-			<div class="prompter-tail"></div>
-		</div>
-		{#if phase === 'count'}
-			<div class="prompter-count" aria-live="polite">
-				{#key count}<b>{count}</b>{/key}
-			</div>
-		{/if}
-	</div>
-
-	{#if cameraError}<p class="prompter-camera-note" role="alert">{cameraError}</p>{/if}
-	{#if recordError}<p class="prompter-note" role="alert">{recordError}</p>{/if}
-	{#if savedUrl}
-		<div class="prompter-save" role="status">
-			<p>Tap Save Video to keep it in Photos</p>
-			<button class="pill" type="button" onclick={() => shareTake(true)}>Save to Photos</button>
-			<div class="prompter-save-actions">
-				<button class="text-btn" type="button" onclick={retake}>Retake</button>
-				<button class="text-btn" type="button" onclick={releaseTake}>Discard</button>
-			</div>
-		</div>
-	{/if}
 </div>

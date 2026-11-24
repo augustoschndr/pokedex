@@ -67,24 +67,6 @@ render('apple-touch-icon-dark.png', 180, dark);
 const startupDir = path.resolve('src/lib/brand/startup');
 fs.mkdirSync(startupDir, { recursive: true });
 
-/**
- * Device pixels for the portrait launch images iOS picks from media queries.
- * status is the status-bar height in device pixels. The web view starts below
- * that bar, so the mark is centered in the area the inline splash occupies.
- */
-const startupSizes = [
-	[750, 1334, 40],
-	[640, 1136, 40],
-	[1242, 2208, 60],
-	[1125, 2436, 132],
-	[828, 1792, 96],
-	[1242, 2688, 132],
-	[1170, 2532, 141],
-	[1284, 2778, 141],
-	[1179, 2556, 162],
-	[1290, 2796, 162]
-];
-
 function startupSvg(width, height, status, bg, ink) {
 	const mark = Math.round(Math.min(width, height) * 0.16);
 	const scale = mark / 128;
@@ -111,9 +93,7 @@ function renderStartup(name, width, height, status, bg, ink) {
 	fs.writeFileSync(path.join(startupDir, name), rendered.asPng());
 }
 
-for (const [width, height, status] of startupSizes) {
-	renderStartup(`startup-${width}x${height}.png`, width, height, status, light.bg, light.ink);
-	renderStartup(`startup-${width}x${height}-dark.png`, width, height, status, dark.bg, dark.ink);
-}
+renderStartup('startup-750x1334.png', 750, 1334, 40, light.bg, light.ink);
+renderStartup('startup-750x1334-dark.png', 750, 1334, 40, dark.bg, dark.ink);
 
 console.log('icons written');

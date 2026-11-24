@@ -8,7 +8,10 @@ import {
 	formatClock,
 	micErrorMessage,
 	pickRecorderMime,
-	recordingExtension
+	recordingExtension,
+	shareRecording,
+	takeFileName,
+	takeFromChunks
 } from '../src/lib/prompter.ts';
 
 test('scroll speed stays inside the slider and remembers a blank value as the default', () => {
@@ -22,12 +25,61 @@ test('scroll speed stays inside the slider and remembers a blank value as the de
 test('mp4 is preferred when the phone can record it', () => {
 	assert.equal(
 		pickRecorderMime((type) => type.startsWith('video/mp4')),
-		'video/mp4;codecs=avc1.42E01E,mp4a.40.2'
+		'video/mp4'
 	);
 	assert.equal(pickRecorderMime((type) => type === 'video/webm'), 'video/webm');
 	assert.equal(pickRecorderMime(() => false), '');
 	assert.equal(recordingExtension('video/webm;codecs=vp8,opus'), 'webm');
 	assert.equal(recordingExtension('video/mp4'), 'mp4');
+});
+
+test('a stopped take is a named file and the share sheet stays on the tap', async () => {
+	const when = new Date(2026, 10, 23, 9, 5);
+	assert.equal(takeFileName(when), 'pokedex-20261123-0905.mp4');
+	assert.equal(takeFromChunks([], 'video/mp4', when), null);
+	assert.equal(takeFromChunks([new Blob()], 'video/mp4', when), null);
+	const file = takeFromChunks([new Blob(['hi'], { type: 'video/mp4' })], 'video/mp4;codecs=avc1', when);
+	assert.ok(file);
+	assert.equal(file.name, 'pokedex-20261123-0905.mp4');
+	assert.equal(file.type, 'video/mp4');
+	const plain = takeFromChunks([new Blob(['hi'])], '', when);
+	assert.equal(plain?.name.endsWith('.mp4'), true);
+	assert.equal(plain?.type, 'video/mp4');
+	const webm = takeFromChunks([new Blob(['hi'])], 'video/webm;codecs=vp8', when);
+	assert.equal(webm?.name, 'pokedex-20261123-0905.webm');
+
+	let shared = false;
+	assert.equal(await shareRecording(file, async () => {
+		shared = true;
+	}), 'shared');
+	assert.equal(shared, true);
+
+	assert.equal(
+		await shareRecording(file, async () => {
+			throw new DOMException('closed', 'AbortError');
+		}),
+		'abort'
+	);
+	assert.equal(
+		await shareRecording(file, async () => {
+			throw new DOMException('blocked', 'NotAllowedError');
+		}),
+		'button'
+	);
+	let called = false;
+	assert.equal(
+		await shareRecording(file, async () => {
+			called = true;
+		}, () => false),
+		'button'
+	);
+	assert.equal(called, false);
+	assert.equal(
+		await shareRecording(file, () => {
+			throw new Error('gesture gone');
+		}),
+		'button'
+	);
 });
 
 test('a denied camera or microphone explains how to allow it', () => {
@@ -51,8 +103,23 @@ test('the teleprompter scrolls on a frame loop and does not upload the take', ()
 	assert.match(source, /navigator\.share/);
 	assert.match(source, /wakeLock/);
 	assert.match(source, /Save to Photos/);
-	assert.match(source, /Tap Save Video to keep it in Photos/);
+	assert.match(source, /Tap Save Video to put it in Photos/);
+	assert.match(source, /rec\.start\(500\)/);
+	assert.match(source, /Download/);
+	assert.match(source, /saveError/);
+	assert.doesNotMatch(source, /requestData\(/);
 	assert.doesNotMatch(source, /fetch\(/);
+	const finish = source.slice(source.indexOf('function finishTake'), source.indexOf('function stopRecorder'));
+	assert.match(finish, /saveOffer = true/);
+	assert.match(finish, /active\.stop\(\)/);
+	assert.ok(finish.indexOf('saveOffer = true') < finish.indexOf('active.stop()'));
+	assert.doesNotMatch(finish, /navigator\.share|shareRecording|await/);
+	const stopped = source.slice(source.indexOf('rec.onstop'), source.indexOf('rec.start(500)'));
+	assert.match(stopped, /saveOffer = true/);
+	assert.doesNotMatch(stopped, /navigator\.share|shareRecording/);
+	const css = fs.readFileSync('src/app.css', 'utf8');
+	assert.doesNotMatch(css, /height:\s*42%/);
+	assert.match(css, /\.prompter-stage \{ flex: 1/);
 	const detail = fs.readFileSync('src/lib/components/TaskDetail.svelte', 'utf8');
 	assert.match(detail, /class="back-btn"/);
 	assert.doesNotMatch(detail, /class="icon-btn"/);
@@ -61,19 +128,46 @@ test('the teleprompter scrolls on a frame loop and does not upload the take', ()
 	assert.match(hooks, /microphone=\(self\)/);
 	assert.match(hooks, /geolocation=\(\)/);
 	const html = fs.readFileSync('src/app.html', 'utf8');
-	assert.match(html, /id="boot"/);
+	assert.equal((html.match(/id="boot"/g) ?? []).length, 1);
 	assert.match(html, /localStorage\.getItem\("pokedex-theme"\)/);
+	assert.match(html, /pokedex-theme=/);
+	assert.match(html, /root\.style\.background/);
+	assert.match(html, /%pokedex\.startup%/);
 	assert.match(html, /16vmin/);
+	assert.match(html, /250ms/);
+	assert.match(html, /prefers-color-scheme: dark/);
 	assert.doesNotMatch(html, /boot-mark/);
 	assert.doesNotMatch(html, /theme\.js/);
-	assert.match(html, /startup-750x1334-v4\.png/);
-	assert.match(html, /device-width: 375px\) and \(device-height: 667px\)/);
-	assert.match(html, /prefers-color-scheme: dark/);
+	assert.doesNotMatch(html, /apple-touch-startup-image/);
+	assert.equal(fs.existsSync('src/lib/components/Splash.svelte'), false);
 	const png = fs.readFileSync('src/lib/brand/startup/startup-750x1334.png');
 	assert.equal(png.readUInt32BE(16), 750);
 	assert.equal(png.readUInt32BE(20), 1334);
+	const theme = fs.readFileSync('src/lib/theme.ts', 'utf8');
+	const media = theme.slice(theme.indexOf('SE_STARTUP_MEDIA'), theme.indexOf('export function parseTheme'));
+	assert.match(media, /device-width: 375px/);
+	assert.match(media, /device-height: 667px/);
+	assert.doesNotMatch(media, /prefers-color-scheme/);
+	assert.match(theme, /apple-touch-startup-image/);
+	assert.match(theme, /themeForRequest/);
+	const manifest = fs.readFileSync('src/routes/manifest.webmanifest/+server.ts', 'utf8');
+	assert.match(manifest, /manifestColors/);
+	assert.match(manifest, /vary: 'Cookie'/);
 	const inline = html.match(/<script>([\s\S]*?)<\/script>/);
 	assert.ok(inline);
 	const hash = crypto.createHash('sha256').update(inline[1]).digest('base64');
 	assert.match(fs.readFileSync('svelte.config.js', 'utf8'), new RegExp(hash.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
+test('a green push to main deploys, and a missing Coolify secret skips', () => {
+	const workflow = fs.readFileSync('.github/workflows/deploy.yml', 'utf8');
+	assert.match(workflow, /workflows: \[CI\]/);
+	assert.match(workflow, /head_branch == 'main'/);
+	assert.match(workflow, /secrets\.COOLIFY_DEPLOY_WEBHOOK/);
+	assert.match(workflow, /secrets\.COOLIFY_TOKEN/);
+	assert.match(workflow, /Authorization: Bearer/);
+	assert.match(workflow, /::notice::/);
+	const readme = fs.readFileSync('README.md', 'utf8');
+	assert.match(readme, /COOLIFY_DEPLOY_WEBHOOK/);
+	assert.match(readme, /COOLIFY_TOKEN/);
 });

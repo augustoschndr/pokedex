@@ -69,6 +69,15 @@ Coolify, when you are ready to create the application (this repo does not create
 - Health check `GET /api/health`
 - The env vars from `.env.example`
 
+A push to `main` runs CI. After that run succeeds, `.github/workflows/deploy.yml` deploys by calling the Coolify webhook. Add these two GitHub Actions repository secrets (Settings → Secrets and variables → Actions). They are not app environment variables:
+
+| Secret | Purpose |
+| --- | --- |
+| `COOLIFY_DEPLOY_WEBHOOK` | Coolify webhook URL that deploys this application |
+| `COOLIFY_TOKEN` | Bearer token, sent as `Authorization: Bearer …` |
+
+If either secret is missing, the deploy job prints a notice and skips. Pull requests do not deploy.
+
 DNS, added by hand in Cloudflare, DNS only (grey cloud) so Traefik can issue the certificate:
 
 | Type | Name | Value |
