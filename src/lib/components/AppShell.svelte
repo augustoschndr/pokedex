@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import DecisionsPage from '../../routes/decisions/+page.svelte';
-	import StudyPage from '../../routes/study/+page.svelte';
+	import MorePage from '../../routes/more/+page.svelte';
+	import PlanPage from '../../routes/plan/+page.svelte';
 	import TodayPage from '../../routes/today/+page.svelte';
 	import WeekPage from '../../routes/week/+page.svelte';
-	import YouPage from '../../routes/you/+page.svelte';
 	import {
 		aimedVelocity,
 		commitDirection,
@@ -14,6 +13,7 @@
 		stepSpring,
 		TAB_HREFS,
 		tabIndex,
+		tabRoot,
 		type TabHref
 	} from '$lib/tabs';
 	import TabBar from './TabBar.svelte';
@@ -29,19 +29,17 @@
 		tabs: {
 			today: { screen: unknown };
 			week: Record<string, unknown>;
-			you: { intro: string; items: unknown[] };
-			study: { study: unknown; reels_rules: unknown };
-			decisions: { decisions: unknown[] };
+			plan: { plan: unknown };
+			more: { openTodos: number; studyCount: number; briefCount: number; pending: number };
 		};
 		children: import('svelte').Snippet;
 	} = $props();
 
 	const titles: Record<TabHref, string> = {
 		'/today': 'Today',
-		'/week': 'This week',
-		'/you': 'Only you',
-		'/study': 'Study',
-		'/decisions': 'Decisions'
+		'/week': 'Week',
+		'/plan': 'Plan',
+		'/more': 'More'
 	};
 
 	let shell = $state<HTMLDivElement | null>(null);
@@ -54,7 +52,7 @@
 	const shown = $derived(parked ?? Math.max(0, tabIndex(path)));
 	const onTab = $derived(isTab(path));
 	const moving = $derived(dragging || animating);
-	const barPath = $derived(onTab ? (TAB_HREFS[shown] ?? path) : path);
+	const barPath = $derived(onTab ? (TAB_HREFS[shown] ?? path) : (tabRoot(path) ?? path));
 	const title = $derived(isTab(path) ? titles[path] : '');
 
 	$effect(() => {
@@ -334,12 +332,10 @@
 						<TodayPage data={tabs.today as never} />
 					{:else if href === '/week'}
 						<WeekPage data={tabs.week as never} />
-					{:else if href === '/you'}
-						<YouPage data={tabs.you as never} />
-					{:else if href === '/study'}
-						<StudyPage data={tabs.study as never} />
+					{:else if href === '/plan'}
+						<PlanPage data={tabs.plan as never} />
 					{:else}
-						<DecisionsPage data={tabs.decisions as never} />
+						<MorePage data={tabs.more as never} />
 					{/if}
 				</div>
 			{/each}

@@ -1,8 +1,6 @@
-import { error } from '@sveltejs/kit';
-import { currentPlan } from '$lib/server/content';
+import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
-export const load: PageServerLoad = ({ locals }) => {
-	if (!locals.user) error(401, 'Unauthorized');
-	return { plan: currentPlan(locals.user.id) };
+export const load: PageServerLoad = () => {
+	throw redirect(301, '/plan');
 };

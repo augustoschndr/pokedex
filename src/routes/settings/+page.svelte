@@ -164,8 +164,13 @@
 
 <svelte:head><title>Settings · Pokedex</title></svelte:head>
 
-<main class="settings">
-	<a class="text-btn" href="/today">Back</a>
+<main>
+	<a class="back-btn" href="/more">
+		<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<path d="M11 4L6 9l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+		</svg>
+		More
+	</a>
 	<h1 style="margin-top: 8px">Settings</h1>
 	<p class="meta" style="margin-top: 8px">{data.name}</p>
 	<p class="small muted">{data.passkeys} passkey · {data.push} notification device</p>

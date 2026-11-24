@@ -1,85 +1,33 @@
 <script lang="ts">
-	import SettingsLink from '$lib/components/SettingsLink.svelte';
+	import Tags from '$lib/components/Tags.svelte';
 
 	let { data } = $props();
-
-	function tone(tone: string | undefined) {
-		if (tone === 'warning') return 'warn';
-		if (tone === 'success') return 'ok';
-		if (tone === 'info') return 'info';
-		return '';
-	}
+	const width = $derived(data.total ? Math.round((data.done / data.total) * 100) : 0);
 </script>
 
 <main>
-	<div class="toprow">
-		<div class="titles">
-			<p class="kicker">{data.dateLabel || 'Shot list'}</p>
-			<h1>This week</h1>
-		</div>
-		<SettingsLink />
-	</div>
-	{#if data.intro}<p class="meta">{data.intro}</p>{/if}
-	{#if data.plan}
-		<a class="card prep-link" href="/week/plan" style="margin-top: 16px">
-			<p class="kicker">Plan</p>
-			<p class="guide-title" style="margin-top: 4px">{data.plan.done} of {data.plan.total} done</p>
-		</a>
-	{/if}
+	<p class="kicker">{data.dateLabel || 'This week'}</p>
+	<h1>Week</h1>
+	{#if data.intro}<p class="meta" style="margin-top: 8px">{data.intro}</p>{/if}
 
-	{#if data.days.length === 0}
-		<p class="lede">No shots on the list yet.</p>
+	{#if data.total === 0}
+		<p class="lede">Nothing this week.</p>
 	{:else}
+		<p class="meta" style="margin-top: 16px">{data.done} of {data.total}</p>
+		<div class="meter" role="img" aria-label="{data.done} of {data.total} done">
+			<span style:width="{width}%"></span>
+		</div>
 		<div class="stack" style="margin-top: 16px">
-			{#each data.days as day (day.date)}
-				{#if day.items.length === 0}
-					<p class="day-line" class:today={day.relation === 'today'} class:past={day.relation === 'past'}>
-						<span>{day.label}</span>
-						<span class="muted">{day.relation === 'today' ? 'Today · nothing scheduled' : 'Nothing scheduled'}</span>
-					</p>
-				{:else}
-					<article
-						class="card day"
-						class:today={day.relation === 'today'}
-						class:past={day.relation === 'past'}
-						aria-current={day.relation === 'today' ? 'date' : undefined}
-					>
-						<div class="week-top">
-							<span class="lead">{day.label}</span>
-							{#if day.relation === 'today'}<span class="chip">Today</span>{/if}
-						</div>
-						{#each day.items as item}
-							<div class="shot">
-								<div class="week-top">
-									<h2><a class="stretch" href="/week/{item.id}">{item.title}</a></h2>
-									{#if item.status}
-										<span class="chip">
-											<span class="dot {tone(item.status.tone)}"></span>
-											{item.status.label}
-										</span>
-									{/if}
-								</div>
-								{#if item.detail}<p class="meta" style="margin-top: 6px">{item.detail}</p>{/if}
-								{#if item.meta || item.duration}
-									<p class="small muted" style="margin-top: 8px">
-										{item.duration ?? ''}{item.duration && item.meta ? ' · ' : ''}{item.meta ?? ''}
-									</p>
-								{/if}
-							</div>
-						{/each}
-					</article>
-				{/if}
+			{#each data.items as item (item.kind + item.id)}
+				<a class="card prep-link week-row" class:done={item.done} href={item.href}>
+					<p class="small muted">{item.dateLabel}</p>
+					<p class="guide-title" style="margin-top: 4px">{item.title}</p>
+					<Tags phase={item.phase} frame={item.frame} />
+					{#if item.slipped && item.movedFrom}
+						<p class="slipped">Moved from {item.movedFrom}</p>
+					{/if}
+				</a>
 			{/each}
-			{#if data.undated.length}
-				<article class="card">
-					<p class="lead">No date</p>
-					{#each data.undated as item}
-						<div class="shot">
-							<p class="small"><a class="stretch shot-link" href="/week/{item.id}">{item.title}</a></p>
-						</div>
-					{/each}
-				</article>
-			{/if}
 		</div>
 	{/if}
 </main>

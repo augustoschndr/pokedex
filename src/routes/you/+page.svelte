@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from '$app/navigation';
-	import SettingsLink from '$lib/components/SettingsLink.svelte';
+	import Tags from '$lib/components/Tags.svelte';
 	import { takeCheckPress } from '$lib/check-press';
 	import { createToggleQueue } from '$lib/toggle-queue';
 
@@ -43,12 +43,15 @@
 </script>
 
 <main>
-	<div class="toprow">
-		<div class="titles">
-			<p class="kicker">Physical</p>
-			<h1>Only you</h1>
-		</div>
-		<SettingsLink />
+	<a class="back-btn" href="/more">
+		<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<path d="M11 4L6 9l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+		</svg>
+		More
+	</a>
+	<div class="titles" style="margin-top: 12px">
+		<p class="kicker">Physical</p>
+		<h1>Only you</h1>
 	</div>
 	{#if data.intro}<p class="lede">{data.intro}</p>{/if}
 	{#if error}<p class="error" role="alert">{error}</p>{/if}
@@ -81,6 +84,7 @@
 					<a class="stretch todo-copy" href="/you/{item.id}">
 						<p class="todo-text">{item.text}</p>
 						{#if item.meta}<p class="small muted" style="margin-top: 4px">{item.meta}</p>{/if}
+						<Tags phase={item.phase} frame={item.frame} />
 					</a>
 				</div>
 			{/each}

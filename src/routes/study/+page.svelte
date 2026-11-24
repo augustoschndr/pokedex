@@ -1,5 +1,4 @@
 <script lang="ts">
-	import SettingsLink from '$lib/components/SettingsLink.svelte';
 	import StudyBlock from '$lib/components/StudyBlock.svelte';
 
 	let { data } = $props();
@@ -7,12 +6,15 @@
 </script>
 
 <main>
-	<div class="toprow">
-		<div class="titles">
-			<p class="kicker">Notes</p>
-			<h1>Study</h1>
-		</div>
-		<SettingsLink />
+	<a class="back-btn" href="/more">
+		<svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+			<path d="M11 4L6 9l5 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+		</svg>
+		More
+	</a>
+	<div class="titles" style="margin-top: 12px">
+		<p class="kicker">Notes</p>
+		<h1>Study</h1>
 	</div>
 	{#if data.study.intro}<p class="lede">{data.study.intro}</p>{/if}
 	{#if empty}

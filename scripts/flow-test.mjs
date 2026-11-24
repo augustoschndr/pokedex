@@ -179,7 +179,7 @@ try {
 	check(login.headers.get('cdn-cache-control') === 'no-store', 'html cdn cache');
 	check(login.headers.get('cloudflare-cdn-cache-control') === 'no-store', 'html cloudflare cache');
 	const sw = await raw('/service-worker.js');
-	check(sw.status === 200 && sw.buf.toString('utf8').includes("const CACHE = 'pokedex-v11'"), 'service worker is served');
+	check(sw.status === 200 && sw.buf.toString('utf8').includes("const CACHE = 'pokedex-v12'"), 'service worker is served');
 	check(sw.headers.get('cache-control') === 'no-cache, no-store, must-revalidate', 'service worker is not cached');
 	check(sw.headers.get('cdn-cache-control') === 'no-store', 'service worker cdn cache');
 	check(sw.headers.get('cloudflare-cdn-cache-control') === 'no-store', 'service worker cloudflare cache');
@@ -306,6 +306,8 @@ try {
 	const todayPage = await api('/today', { cookie });
 	check(todayPage.status === 200, 'today page');
 	check(todayPage.text.includes(todayLabel), `today page shows ${todayLabel}`);
+	check(todayPage.text.includes('Decide US website pricing'), 'a pending decision is on today');
+	check(todayPage.text.includes('>Approve<'), 'the decision offers a choice');
 	if (zoneToday < '2026-11-23') {
 		check(todayPage.text.includes('Prep day'), 'prep day before the brief');
 		check(todayPage.text.includes('— in ') || todayPage.text.includes('tomorrow'), 'prep countdown');
@@ -314,8 +316,8 @@ try {
 		check(todayPage.text.includes('Origin-story'), 'lesson shows on its own day');
 	}
 	const weekPage = await api('/week', { cookie });
-	check(weekPage.status === 200 && weekPage.text.includes('Film the origin-story long-form'), 'week page shots');
-	check(weekPage.text.includes('Nothing scheduled'), 'week shows real days without invented shots');
+	check(weekPage.status === 200 && weekPage.text.includes('>Week<'), 'week page');
+	check(!weekPage.text.includes('Nothing scheduled'), 'week is a list, not an empty calendar');
 	const theme = await api('/api/v1/me/theme', { method: 'POST', cookie, body: { theme: 'dark' } });
 	check(theme.status === 200 && theme.json.theme === 'dark', 'theme saved');
 	const me = await api('/api/v1/me', { cookie });
@@ -325,6 +327,22 @@ try {
 	await api('/api/v1/me/theme', { method: 'POST', cookie, body: { theme: 'system' } });
 	const week = await api('/api/v1/week', { cookie });
 	check(week.json.items?.length === 5, 'week screen has 5 shots');
+	{
+		const weekStart = (() => {
+			const [y, m, d] = zoneToday.split('-').map(Number);
+			const index = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+			const delta = index === 0 ? -6 : 1 - index;
+			return addIso(zoneToday, delta);
+		})();
+		const weekEnd = addIso(weekStart, 6);
+		const inWeek = week.json.items.filter((item) => item.date >= weekStart && item.date <= weekEnd);
+		if (inWeek.length === 0) {
+			check(weekPage.text.includes('Nothing this week'), 'empty week says so');
+		} else {
+			check(weekPage.text.includes(`${inWeek.filter((item) => item.done).length} of ${inWeek.length}`), 'week progress');
+			for (const item of inWeek) check(weekPage.text.includes(item.title), `week lists ${item.title}`);
+		}
+	}
 	const todos = await api('/api/v1/todos', { cookie });
 	check(todos.json.items?.some((item) => item.id === 'cf-cal' && item.done === false), 'todo open');
 	const study = await api('/api/v1/study', { cookie });
@@ -368,6 +386,7 @@ try {
 	const answers = await api('/api/v1/decisions/answers?since=2020-01-01T00:00:00Z', { bearer: token });
 	check(answers.status === 200 && answers.json.answers.length === 1, 'answers endpoint');
 	check(answers.json.answers[0].comment.includes('founding-client'), 'answer comment returned');
+	check(answers.json.answers[0].option === 'Approve', 'answer exposes the chosen option');
 	const future = await api('/api/v1/decisions/answers?since=2999-01-01T00:00:00Z', { bearer: token });
 	check(future.json.answers.length === 0, 'since filter');
 	const aliasAnswers = await api('/api/decisions/answers', { bearer: token });

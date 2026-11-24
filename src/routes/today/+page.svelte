@@ -1,35 +1,40 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import Diagram from '$lib/components/Diagram.svelte';
-	import SettingsLink from '$lib/components/SettingsLink.svelte';
+	import DecisionCard from '$lib/components/DecisionCard.svelte';
+	import Tags from '$lib/components/Tags.svelte';
 	import { scriptReader } from '$lib/script-reader';
 
 	let { data } = $props();
 	const screen = $derived(data.screen);
-	const today = $derived(screen?.lesson ?? null);
 	const focus = $derived(screen?.focus ?? null);
 
 	onDestroy(() => scriptReader.set(null));
 </script>
 
 <main>
-	<div class="toprow">
-		<p class="kicker">{screen?.dateLabel ?? 'Today'}</p>
-		<SettingsLink />
-	</div>
+	<p class="kicker">{screen?.dateLabel ?? 'Today'}</p>
+	{#if screen?.lesson && !focus?.title?.includes(screen.lesson)}
+		<p class="meta" style="margin-top: 4px">{screen.lesson}</p>
+	{/if}
 
 	{#if focus}
 		{@const item = focus}
-		<p class="kicker">{item.when === 'today' ? 'Today' : `Up next · ${item.dateLabel}`}</p>
+		{#if item.when !== 'today'}
+			<p class="kicker">Up next · {item.dateLabel}</p>
+		{/if}
 		<h1>{item.title}</h1>
 		<svg class="underline" viewBox="0 0 72 8" aria-hidden="true">
 			<path d="M2 5 C 16 2, 28 7, 40 4 S 60 2, 70 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
 		</svg>
+		<Tags phase={item.phase} frame={item.frame} />
 		<div class="chips">
 			{#if item.duration}<span class="chip">{item.duration}</span>{/if}
 			{#if item.meta}<span class="chip">{item.meta}</span>{/if}
 			{#if item.done}<span class="chip">Done</span>{/if}
 		</div>
+		{#if item.slipped && item.movedFrom}
+			<p class="slipped">Moved from {item.movedFrom}</p>
+		{/if}
 		{#if item.summary}<p class="lede">{item.summary}</p>{/if}
 		{#if item.steps.length}
 			<ol class="steps">
@@ -59,20 +64,19 @@
 				<a class="pill full focus-go" href={item.href}>Open</a>
 			{/if}
 		</div>
+	{:else if !screen || screen.mode === 'empty'}
+		<h1>Nothing today</h1>
+		<p class="lede">The next task shows up here when it is on the plan.</p>
+	{:else if screen.mode === 'past'}
+		<h1>Nothing today</h1>
+		<p class="lede">The last brief was {screen.pastLabel}.</p>
 	{/if}
 
-	{#if !screen || screen.mode === 'empty'}
-		{#if !focus}
-			<h1>No lesson yet</h1>
-			<p class="lede">The weekday brief shows up here when it is posted.</p>
-		{/if}
-	{:else if screen.mode === 'prep'}
+	{#if screen?.mode === 'prep' && focus?.when !== 'today'}
 		{#if focus}
 			<h2 style="margin-top: 28px">Prep day</h2>
 		{:else}
 			<h1>Prep day</h1>
-		{/if}
-		{#if focus?.when !== 'today'}
 			<p class="lede">Nothing to film today. The next brief is on its way.</p>
 		{/if}
 		<article class="card" style="margin-top: 16px">
@@ -80,116 +84,33 @@
 			<p class="countdown">{screen.countdown}</p>
 			{#if screen.upcomingTitle}<p class="meta" style="margin-top: 6px">{screen.upcomingTitle}</p>{/if}
 		</article>
-		{#if (!focus && screen.shots.length) || screen.todoCount || screen.studyCount}
-			<section class="section">
-				<h2>Start now</h2>
-				<div class="stack" style="margin-top: 12px">
-					{#if !focus && screen.shots.length}
-						<a class="card prep-link" href="/week">
-							<p class="guide-title">Upcoming shots</p>
-							{#each screen.shots as shot}
-								<p class="small" style="margin-top: 8px"><span class="lead">{shot.lead}</span> {shot.title}</p>
-							{/each}
-						</a>
-					{/if}
-					{#if screen.todoCount}
-						<a class="card prep-link" href="/you">
-							<p class="guide-title">Only you</p>
-							{#each screen.todos as item}
-								<p class="small" style="margin-top: 8px">{item.text}</p>
-							{/each}
-							{#if screen.todoCount > screen.todos.length}
-								<p class="small muted" style="margin-top: 8px">{screen.todoCount - screen.todos.length} more</p>
-							{/if}
-						</a>
-					{/if}
-					{#if screen.studyCount}
-						<a class="card prep-link" href="/study">
-							<p class="guide-title">Study</p>
-							<p class="small" style="margin-top: 8px">
-								{screen.studyHeading ?? 'Notes'} · {screen.studyCount} {screen.studyCount === 1 ? 'note' : 'notes'}
-							</p>
-						</a>
-					{/if}
-				</div>
-			</section>
-		{/if}
-	{:else if screen.mode === 'past'}
-		{#if !focus}
-			<h1>No brief today</h1>
-			<p class="lede">The last one was {screen.pastLabel}. Nothing new has been posted for today.</p>
-		{/if}
-		{#if screen.todoCount || screen.studyCount}
-			<section class="section">
-				<h2>Still open</h2>
-				<div class="stack" style="margin-top: 12px">
-					{#if screen.todoCount}
-						<a class="card prep-link" href="/you">
-							<p class="guide-title">Only you</p>
-							<p class="small" style="margin-top: 8px">{screen.todoCount} still open</p>
-						</a>
-					{/if}
-					{#if screen.studyCount}
-						<a class="card prep-link" href="/study">
-							<p class="guide-title">Study</p>
-							<p class="small" style="margin-top: 8px">{screen.studyHeading ?? 'Notes'}</p>
-						</a>
-					{/if}
-				</div>
-			</section>
-		{/if}
-	{:else if today}
-		{#if focus}
-			<h2 style="margin-top: 28px">{today.lesson ?? 'Today'}</h2>
-		{:else}
-			<h1>{today.lesson ?? 'Today'}</h1>
-			<svg class="underline" viewBox="0 0 72 8" aria-hidden="true">
-				<path d="M2 5 C 16 2, 28 7, 40 4 S 60 2, 70 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-			</svg>
-		{/if}
-		{#if today.pillar || today.where_it_goes}
-			<div class="chips">
-				{#if today.pillar}<span class="chip">{today.pillar}</span>{/if}
-				{#if today.where_it_goes}<span class="chip">{today.where_it_goes}</span>{/if}
+	{/if}
+
+	{#if screen && screen.also.length}
+		<section class="section">
+			<h2>Also today</h2>
+			<div class="stack" style="margin-top: 12px">
+				{#each screen.also as item (item.kind + item.id)}
+					<a class="card prep-link" href={item.href}>
+						<p class="guide-title" class:done-title={item.done}>{item.title}</p>
+						<Tags phase={item.phase} frame={item.frame} />
+						{#if item.slipped && item.movedFrom}
+							<p class="slipped">Moved from {item.movedFrom}</p>
+						{/if}
+					</a>
+				{/each}
 			</div>
-		{/if}
-		<div class="stack" style="margin-top: 20px">
-			{#if today.hook}
-				<article class="card fold">
-					<svg class="dogear" viewBox="0 0 28 28" aria-hidden="true">
-						<path d="M0 0h28L0 28z" fill="var(--bg)" />
-						<path d="M0 0h28L0 28" fill="none" stroke="currentColor" stroke-width="1.5" />
-					</svg>
-					<h2>Hook</h2>
-					<p style="margin-top: 8px">{today.hook}</p>
-				</article>
-			{/if}
-			{#if today.talking_points.length}
-				<article class="card">
-					<h2>Talking points</h2>
-					<ol class="points">
-						{#each today.talking_points as point}<li>{point}</li>{/each}
-					</ol>
-				</article>
-			{/if}
-			{#if today.whiteboard}
-				<article class="card">
-					<h2>Whiteboard</h2>
-					<div style="margin-top: 12px"><Diagram diagram={today.whiteboard} /></div>
-				</article>
-			{/if}
-			{#if today.cta}
-				<article class="card">
-					<h2>Close</h2>
-					<p style="margin-top: 8px">{today.cta}</p>
-				</article>
-			{/if}
-			{#if today.body}
-				<article class="card">
-					<h2>Notes</h2>
-					<p class="meta" style="margin-top: 8px">{today.body}</p>
-				</article>
-			{/if}
-		</div>
+		</section>
+	{/if}
+
+	{#if screen && screen.decisions.length}
+		<section class="section">
+			<h2>Decide</h2>
+			<div class="stack" style="margin-top: 12px">
+				{#each screen.decisions as item (item.id)}
+					<DecisionCard {item} />
+				{/each}
+			</div>
+		</section>
 	{/if}
 </main>

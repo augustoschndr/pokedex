@@ -1,11 +1,13 @@
-import { formatDayNum } from '$lib/calendar';
+import { formatDayNum, isSlipped, planDate } from '$lib/calendar';
+import { optionLabel } from '$lib/decisions';
+import { frameStage } from '$lib/frame';
 import { effectiveDate } from '$lib/schedule';
+import type { Guide, GuideStep } from '$lib/types';
+import type { Diagram, StudyBlock } from '$lib/types';
 import { randomId } from './crypto';
 import { db, getMeta } from './db';
 import { timeZone } from './env';
 import { formatInZone, nowIso, nowMs } from './time';
-import type { Guide } from '$lib/types';
-import type { Diagram, StudyBlock } from '$lib/types';
 
 export type TodayView = {
 	date_label: string | null;
@@ -39,6 +41,8 @@ export type TodoView = {
 	meta: string | null;
 	done: boolean;
 	done_at: string | null;
+	phase: string | null;
+	frame: string | null;
 };
 
 export type StudyBlockView = StudyBlock;
@@ -50,6 +54,7 @@ export type DecisionView = {
 	status: string;
 	comment: string | null;
 	answered_at: string | null;
+	option: string | null;
 };
 
 function parseJson<T>(value: string | null, fallback: T): T {
@@ -105,9 +110,51 @@ export type TaskView = {
 	guide: Guide | null;
 	checklist: CheckView[];
 	stepNotes: StepNote[];
-	plan: { id: string; title: string; kind: 'phase' | 'milestone' } | null;
+	plan: {
+		id: string;
+		title: string;
+		kind: 'phase' | 'milestone';
+		phaseId: string;
+		phaseTitle: string;
+		frame: string | null;
+	} | null;
 	back: string;
 };
+
+type PlanHit = NonNullable<TaskView['plan']>;
+
+function phaseDirectory(userId: string): Map<string, PlanHit> {
+	const phases = db()
+		.prepare(`SELECT id, title FROM plan_phase WHERE user_id = ?`)
+		.all(userId) as { id: string; title: string }[];
+	const milestones = db()
+		.prepare(`SELECT id, phase_id, title FROM plan_milestone WHERE user_id = ?`)
+		.all(userId) as { id: string; phase_id: string; title: string }[];
+	const map = new Map<string, PlanHit>();
+	for (const phase of phases) {
+		map.set(phase.id, {
+			id: phase.id,
+			title: phase.title,
+			kind: 'phase',
+			phaseId: phase.id,
+			phaseTitle: phase.title,
+			frame: frameStage(phase.title)
+		});
+	}
+	for (const milestone of milestones) {
+		const phase = map.get(milestone.phase_id);
+		if (!phase) continue;
+		map.set(milestone.id, {
+			id: milestone.id,
+			title: milestone.title,
+			kind: 'milestone',
+			phaseId: phase.phaseId,
+			phaseTitle: phase.phaseTitle,
+			frame: phase.frame
+		});
+	}
+	return map;
+}
 
 function notesFor(userId: string, parentKind: 'todo' | 'week', parentId: string): StepNote[] {
 	const rows = db()
@@ -133,15 +180,7 @@ function checklistFor(userId: string, parentKind: 'todo' | 'week', parentId: str
 
 function planLabel(userId: string, ref: string | undefined): TaskView['plan'] {
 	if (!ref) return null;
-	const milestone = db()
-		.prepare('SELECT id, title FROM plan_milestone WHERE user_id = ? AND id = ?')
-		.get(userId, ref) as { id: string; title: string } | undefined;
-	if (milestone) return { id: milestone.id, title: milestone.title, kind: 'milestone' };
-	const phase = db()
-		.prepare('SELECT id, title FROM plan_phase WHERE user_id = ? AND id = ?')
-		.get(userId, ref) as { id: string; title: string } | undefined;
-	if (phase) return { id: phase.id, title: phase.title, kind: 'phase' };
-	return null;
+	return phaseDirectory(userId).get(ref) ?? null;
 }
 
 export function getTask(userId: string, kind: 'todo' | 'week', id: string): TaskView | null {
@@ -221,7 +260,14 @@ export function getTask(userId: string, kind: 'todo' | 'week', id: string): Task
 	};
 }
 
-export type PlanTask = { kind: 'todo' | 'week'; id: string; title: string; done: boolean };
+export type PlanTask = {
+	kind: 'todo' | 'week';
+	id: string;
+	title: string;
+	done: boolean;
+	phase: string | null;
+	frame: string | null;
+};
 
 export type PlanMilestoneView = {
 	id: string;
@@ -261,11 +307,20 @@ export function currentPlan(userId: string): PlanView | null {
        WHERE user_id = ? ORDER BY sort_order ASC, id ASC`
 		)
 		.all(userId) as { id: string; phase_id: string; title: string; detail: string | null }[];
+	const directory = phaseDirectory(userId);
 	const tasks = linkedTasks(userId);
 	const byRef = new Map<string, PlanTask[]>();
 	for (const task of tasks) {
+		const hit = directory.get(task.ref);
 		const list = byRef.get(task.ref) ?? [];
-		list.push({ kind: task.kind, id: task.id, title: task.title, done: task.done });
+		list.push({
+			kind: task.kind,
+			id: task.id,
+			title: task.title,
+			done: task.done,
+			phase: hit?.phaseTitle ?? null,
+			frame: hit?.frame ?? null
+		});
 		byRef.set(task.ref, list);
 	}
 	const phaseViews = phases.map((phase) => {
@@ -535,20 +590,7 @@ export function currentToday(userId: string): TodayView | null {
 			`SELECT * FROM today_item WHERE user_id = ? AND is_current = 1 ORDER BY updated_at DESC LIMIT 1`
 		)
 		.get(userId) as Record<string, unknown> | undefined;
-	if (!row) return null;
-	return {
-		date_label: (row.date_label as string | null) ?? null,
-		for_date: (row.for_date as string | null) ?? null,
-		lesson: (row.lesson as string | null) ?? null,
-		where_it_goes: (row.where_it_goes as string | null) ?? null,
-		pillar: (row.pillar as string | null) ?? null,
-		body: (row.body as string | null) ?? null,
-		hook: (row.hook as string | null) ?? null,
-		talking_points: parseJson<string[]>(row.talking_points_json as string | null, []),
-		whiteboard: parseJson<Diagram | null>(row.whiteboard_json as string | null, null),
-		cta: (row.cta as string | null) ?? null,
-		updated_at: row.updated_at as string
-	};
+	return row ? todayFromRow(row) : null;
 }
 
 export function currentWeek(userId: string): { intro: string; items: WeekItemView[] } {
@@ -616,9 +658,10 @@ export function scheduledTodos(userId: string): { id: string; text: string; done
 }
 
 export function currentTodos(userId: string): { intro: string; items: TodoView[] } {
+	const directory = phaseDirectory(userId);
 	const rows = db()
 		.prepare(
-			`SELECT id, text, meta, done, done_at FROM todo
+			`SELECT id, text, meta, done, done_at, guide_json FROM todo
        WHERE user_id = ? AND archived = 0 ORDER BY sort_order ASC, id ASC`
 		)
 		.all(userId) as {
@@ -627,17 +670,197 @@ export function currentTodos(userId: string): { intro: string; items: TodoView[]
 		meta: string | null;
 		done: number;
 		done_at: string | null;
+		guide_json: string | null;
 	}[];
 	return {
 		intro: getMeta(userId, 'todos_intro'),
-		items: rows.map((row) => ({
-			id: row.id,
-			text: row.text,
-			meta: row.meta,
-			done: row.done === 1,
-			done_at: row.done_at
-		}))
+		items: rows.map((row) => {
+			const hit = directory.get(readGuide(row.guide_json)?.plan_ref ?? '');
+			return {
+				id: row.id,
+				text: row.text,
+				meta: row.meta,
+				done: row.done === 1,
+				done_at: row.done_at,
+				phase: hit?.phaseTitle ?? null,
+				frame: hit?.frame ?? null
+			};
+		})
 	};
+}
+
+export type ScheduledItem = {
+	kind: 'todo' | 'week';
+	id: string;
+	title: string;
+	done: boolean;
+	date: string;
+	order: number;
+	phase: string | null;
+	frame: string | null;
+	slipped: boolean;
+	movedFrom: string | null;
+	detail: string | null;
+	meta: string | null;
+	summary: string | null;
+	duration: string | null;
+	steps: GuideStep[];
+	script: string | null;
+};
+
+export function scheduledItems(userId: string): ScheduledItem[] {
+	const directory = phaseDirectory(userId);
+	const todos = db()
+		.prepare(
+			`SELECT id, text, meta, done, guide_json, base_date, scheduled_on, sort_order
+       FROM todo WHERE user_id = ? AND archived = 0 ORDER BY sort_order ASC, id ASC`
+		)
+		.all(userId) as {
+		id: string;
+		text: string;
+		meta: string | null;
+		done: number;
+		guide_json: string | null;
+		base_date: string | null;
+		scheduled_on: string | null;
+		sort_order: number;
+	}[];
+	const week = db()
+		.prepare(
+			`SELECT ingest_id, title, detail, meta, done, guide_json, base_date, scheduled_on, sort_order
+       FROM week_item WHERE user_id = ? AND is_current = 1 ORDER BY sort_order ASC`
+		)
+		.all(userId) as {
+		ingest_id: string;
+		title: string;
+		detail: string | null;
+		meta: string | null;
+		done: number;
+		guide_json: string | null;
+		base_date: string | null;
+		scheduled_on: string | null;
+		sort_order: number;
+	}[];
+	const items: ScheduledItem[] = [];
+	const push = (
+		kind: 'todo' | 'week',
+		id: string,
+		title: string,
+		detail: string | null,
+		meta: string | null,
+		done: number,
+		guideJson: string | null,
+		base: string | null,
+		scheduled: string | null,
+		order: number
+	) => {
+		const date = effectiveDate(base, scheduled, id);
+		if (!date) return;
+		const guide = readGuide(guideJson);
+		const hit = directory.get(guide?.plan_ref ?? '');
+		const slipped = isSlipped(base, scheduled, id);
+		const from = planDate(base, id);
+		items.push({
+			kind,
+			id,
+			title,
+			done: done === 1,
+			date,
+			order,
+			phase: hit?.phaseTitle ?? null,
+			frame: hit?.frame ?? null,
+			slipped,
+			movedFrom: slipped && from ? from : null,
+			detail,
+			meta,
+			summary: guide?.summary ?? detail,
+			duration: guide?.duration ?? null,
+			steps: guide?.steps ?? [],
+			script: guide?.script?.trim() || null
+		});
+	};
+	week.forEach((row, index) =>
+		push(
+			'week',
+			row.ingest_id,
+			row.title,
+			row.detail,
+			row.meta,
+			row.done,
+			row.guide_json,
+			row.base_date,
+			row.scheduled_on,
+			index
+		)
+	);
+	for (const row of todos) {
+		push(
+			'todo',
+			row.id,
+			row.text,
+			null,
+			row.meta,
+			row.done,
+			row.guide_json,
+			row.base_date,
+			row.scheduled_on,
+			1000 + row.sort_order
+		);
+	}
+	return items;
+}
+
+export type BriefSummary = {
+	id: string;
+	lesson: string | null;
+	for_date: string | null;
+	date_label: string | null;
+	current: boolean;
+};
+
+function todayFromRow(row: Record<string, unknown>): TodayView {
+	return {
+		date_label: (row.date_label as string | null) ?? null,
+		for_date: (row.for_date as string | null) ?? null,
+		lesson: (row.lesson as string | null) ?? null,
+		where_it_goes: (row.where_it_goes as string | null) ?? null,
+		pillar: (row.pillar as string | null) ?? null,
+		body: (row.body as string | null) ?? null,
+		hook: (row.hook as string | null) ?? null,
+		talking_points: parseJson<string[]>(row.talking_points_json as string | null, []),
+		whiteboard: parseJson<Diagram | null>(row.whiteboard_json as string | null, null),
+		cta: (row.cta as string | null) ?? null,
+		updated_at: row.updated_at as string
+	};
+}
+
+export function listBriefs(userId: string): BriefSummary[] {
+	const rows = db()
+		.prepare(
+			`SELECT id, lesson, for_date, date_label, is_current FROM today_item
+       WHERE user_id = ? ORDER BY is_current DESC, updated_at DESC`
+		)
+		.all(userId) as {
+		id: string;
+		lesson: string | null;
+		for_date: string | null;
+		date_label: string | null;
+		is_current: number;
+	}[];
+	return rows.map((row) => ({
+		id: row.id,
+		lesson: row.lesson,
+		for_date: row.for_date,
+		date_label: row.date_label,
+		current: row.is_current === 1
+	}));
+}
+
+export function getBrief(userId: string, id: string): TodayView | null {
+	const row = db()
+		.prepare(`SELECT * FROM today_item WHERE user_id = ? AND id = ?`)
+		.get(userId, id) as Record<string, unknown> | undefined;
+	return row ? todayFromRow(row) : null;
 }
 
 function currentBlocks(userId: string, group: 'study' | 'reels_rules'): StudyBlockView[] {
@@ -697,7 +920,8 @@ export function currentDecisions(userId: string): DecisionView[] {
 		detail: row.detail,
 		status: row.status,
 		comment: row.answer_comment,
-		answered_at: row.answered_epoch ? formatInZone(row.answered_epoch, timeZone()) : null
+		answered_at: row.answered_epoch ? formatInZone(row.answered_epoch, timeZone()) : null,
+		option: row.status === 'pending' ? null : optionLabel(row.status)
 	}));
 }
 
@@ -708,7 +932,7 @@ export function pendingDecisionCount(userId: string): number {
 	return row.c;
 }
 
-export function toggleTodo(userId: string, id: string): TodoView | null {
+export function toggleTodo(userId: string, id: string): Omit<TodoView, 'phase' | 'frame'> | null {
 	const row = db()
 		.prepare('SELECT id, text, meta, done, done_at, archived FROM todo WHERE user_id = ? AND id = ?')
 		.get(userId, id) as
@@ -814,6 +1038,7 @@ export type AnswerRecord = {
 	id: string;
 	title: string;
 	action: 'approved' | 'rejected' | 'commented';
+	option: string | null;
 	comment: string | null;
 	answered_at: string;
 	epoch: number;
@@ -847,6 +1072,7 @@ export function answerDecision(
 		id: row.id,
 		title: row.title,
 		action,
+		option: optionLabel(action),
 		comment,
 		answered_at: formatInZone(epoch, timeZone()),
 		epoch
@@ -885,6 +1111,7 @@ export function listAnswers(userId: string, sinceMs: number | null, limit: numbe
 		id: row.id,
 		title: row.title,
 		action: row.status,
+		option: optionLabel(row.status),
 		comment: row.answer_comment,
 		answered_at: formatInZone(row.answered_epoch, timeZone()),
 		epoch: row.answered_epoch

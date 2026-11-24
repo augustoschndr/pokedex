@@ -10,6 +10,7 @@ export function deliverAnswer(userId: string, answer: AnswerRecord): void {
 		id: answer.id,
 		title: answer.title,
 		action: answer.action,
+		option: answer.option,
 		comment: answer.comment,
 		answered_at: answer.answered_at
 	});

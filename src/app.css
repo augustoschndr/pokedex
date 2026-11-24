@@ -435,7 +435,7 @@ input.step-note { min-height: 40px; margin-top: 8px; padding: 8px 12px; font-siz
 	bottom: calc(var(--tab-gap) + var(--sab));
 	height: var(--tab-h);
 	display: grid;
-	grid-template-columns: repeat(5, minmax(0, 1fr));
+	grid-template-columns: repeat(4, minmax(0, 1fr));
 	padding: 4px;
 	background: color-mix(in srgb, var(--card) 74%, transparent);
 	border: var(--hairline) solid var(--line);
@@ -663,6 +663,33 @@ a.stretch:focus-visible { outline: none; }
 	line-height: 1.35;
 }
 .plan-task.done { color: var(--ink-soft); text-decoration: line-through; text-decoration-thickness: 1px; }
+.plan-row .plan-task { min-height: 28px; padding-bottom: 0; }
+.plan-row .chips { margin-top: 2px; }
+.week-row.done .guide-title { color: var(--ink-soft); text-decoration: line-through; text-decoration-thickness: 1px; }
+.done-title { color: var(--ink-soft); text-decoration: line-through; text-decoration-thickness: 1px; }
+.slipped { margin-top: 6px; color: var(--muted); font-size: 13px; }
+.option {
+	width: 100%;
+	min-height: 44px;
+	text-align: left;
+	padding: 0 14px;
+	border-radius: 14px;
+	border: var(--hairline) solid var(--line);
+	background: transparent;
+	font-weight: 600;
+}
+.chosen {
+	display: inline-flex;
+	align-items: center;
+	min-height: 28px;
+	padding: 4px 10px;
+	border-radius: 999px;
+	background: var(--ink);
+	color: var(--bg);
+	font-size: 13px;
+	font-weight: 600;
+}
+.pane main.settings { min-height: 0; padding: 0; }
 .milestone { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 .prompter {
 	position: fixed;

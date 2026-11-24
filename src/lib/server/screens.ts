@@ -1,31 +1,29 @@
 import {
-	calendarSpan,
 	countdownPhrase,
 	diffDays,
-	eachDay,
+	endOfWeek,
 	formatDayNum,
 	formatLong,
 	formatShort,
 	isoDateInZone,
-	relation,
-	type DayRelation
+	startOfWeek
 } from '$lib/calendar';
 import { chooseFocus } from '$lib/schedule';
 import type { GuideStep } from '$lib/types';
-import { timeZone } from './env';
 import {
+	currentDecisions,
 	currentPlan,
 	currentStudy,
 	currentToday,
 	currentTodos,
 	currentWeek,
-	getTask,
-	scheduledTodos,
-	type TodayView,
-	type WeekItemView
+	listBriefs,
+	pendingDecisionCount,
+	scheduledItems,
+	type DecisionView,
+	type ScheduledItem
 } from './content';
-
-export type ShotPreview = WeekItemView;
+import { timeZone } from './env';
 
 export type HomeFocus = {
 	kind: 'todo' | 'week';
@@ -40,6 +38,23 @@ export type HomeFocus = {
 	steps: GuideStep[];
 	script: string | null;
 	done: boolean;
+	phase: string | null;
+	frame: string | null;
+	slipped: boolean;
+	movedFrom: string | null;
+	href: string;
+};
+
+export type DayItem = {
+	kind: 'todo' | 'week';
+	id: string;
+	title: string;
+	dateLabel: string;
+	done: boolean;
+	phase: string | null;
+	frame: string | null;
+	slipped: boolean;
+	movedFrom: string | null;
 	href: string;
 };
 
@@ -50,67 +65,66 @@ export type TodayPage = {
 	countdown: string | null;
 	upcomingTitle: string | null;
 	pastLabel: string | null;
-	lesson: TodayView | null;
+	lesson: string | null;
 	focus: HomeFocus | null;
-	shots: ShotPreview[];
-	todos: { id: string; text: string; meta: string | null }[];
-	todoCount: number;
-	studyHeading: string | null;
-	studyCount: number;
-};
-
-export type WeekDay = {
-	date: string;
-	label: string;
-	relation: DayRelation;
-	items: ShotPreview[];
+	also: DayItem[];
+	decisions: DecisionView[];
 };
 
 export type WeekPage = {
 	today: string;
 	dateLabel: string;
 	intro: string;
-	days: WeekDay[];
-	undated: ShotPreview[];
-	plan: { done: number; total: number } | null;
+	items: DayItem[];
+	done: number;
+	total: number;
 };
 
-function shots(userId: string): ShotPreview[] {
-	return currentWeek(userId).items;
+export type MorePage = {
+	openTodos: number;
+	studyCount: number;
+	briefCount: number;
+	pending: number;
+};
+
+function hrefFor(kind: 'todo' | 'week', id: string): string {
+	return kind === 'todo' ? `/you/${id}` : `/week/${id}`;
 }
 
-function homeFocus(userId: string, today: string): HomeFocus | null {
-	const candidates = [
-		...shots(userId).flatMap((item, index) =>
-			item.date ? [{ kind: 'week' as const, id: item.id, date: item.date, done: item.done, order: index }] : []
-		),
-		...scheduledTodos(userId).map((item) => ({
-			kind: 'todo' as const,
-			id: item.id,
-			date: item.date,
-			done: item.done,
-			order: item.order
-		}))
-	];
-	const chosen = chooseFocus(candidates, today);
-	if (!chosen) return null;
-	const task = getTask(userId, chosen.kind, chosen.id);
-	if (!task) return null;
-	const script = task.guide?.script?.trim() || null;
+function asFocus(item: ScheduledItem & { when: 'today' | 'next' }): HomeFocus {
 	return {
-		kind: chosen.kind,
-		id: chosen.id,
-		title: task.title,
-		date: chosen.date,
-		dateLabel: formatShort(chosen.date),
-		when: chosen.when,
-		summary: task.guide?.summary ?? task.detail,
-		duration: task.guide?.duration ?? null,
-		meta: task.meta,
-		steps: (task.guide?.steps ?? []).slice(0, 4),
-		script,
-		done: task.done,
-		href: chosen.kind === 'todo' ? `/you/${chosen.id}` : `/week/${chosen.id}`
+		kind: item.kind,
+		id: item.id,
+		title: item.title,
+		date: item.date,
+		dateLabel: formatShort(item.date),
+		when: item.when,
+		summary: item.summary,
+		duration: item.duration,
+		meta: item.meta,
+		steps: item.steps.slice(0, 4),
+		script: item.script,
+		done: item.done,
+		phase: item.phase,
+		frame: item.frame,
+		slipped: item.slipped,
+		movedFrom: item.movedFrom ? formatDayNum(item.movedFrom) : null,
+		href: hrefFor(item.kind, item.id)
+	};
+}
+
+function asDay(item: ScheduledItem): DayItem {
+	return {
+		kind: item.kind,
+		id: item.id,
+		title: item.title,
+		dateLabel: formatDayNum(item.date),
+		done: item.done,
+		phase: item.phase,
+		frame: item.frame,
+		slipped: item.slipped,
+		movedFrom: item.movedFrom ? formatDayNum(item.movedFrom) : null,
+		href: hrefFor(item.kind, item.id)
 	};
 }
 
@@ -126,49 +140,56 @@ export function todayPage(userId: string, now = Date.now()): TodayPage {
 	else if (daysUntil < 0) mode = 'past';
 	else mode = 'lesson';
 
-	const open = currentTodos(userId).items.filter((item) => !item.done);
-	const study = currentStudy(userId).study.blocks;
-	const upcoming = shots(userId)
-		.filter((item) => item.date && item.date >= today)
-		.slice(0, 3);
+	const items = scheduledItems(userId);
+	const chosen = chooseFocus(items, today);
+	const focus = chosen ? asFocus(chosen) : null;
+	const also = items
+		.filter((item) => item.date === today && !(focus && item.kind === focus.kind && item.id === focus.id))
+		.slice(0, 2)
+		.map(asDay);
 
 	return {
 		today,
 		dateLabel: formatLong(today),
 		mode,
 		countdown: mode === 'prep' && briefDate ? countdownPhrase(today, briefDate) : null,
-		upcomingTitle: mode === 'prep' ? brief?.lesson ?? null : null,
+		upcomingTitle: mode === 'prep' ? (brief?.lesson ?? null) : null,
 		pastLabel: mode === 'past' && briefDate ? formatShort(briefDate) : null,
-		lesson: mode === 'lesson' ? brief : null,
-		focus: homeFocus(userId, today),
-		shots: upcoming,
-		todos: open.slice(0, 3).map((item) => ({ id: item.id, text: item.text, meta: item.meta })),
-		todoCount: open.length,
-		studyHeading: study[0]?.heading ?? null,
-		studyCount: study.length
+		lesson: mode === 'lesson' ? (brief?.lesson ?? null) : null,
+		focus,
+		also,
+		decisions: currentDecisions(userId).filter((item) => item.status === 'pending')
 	};
 }
 
 export function weekPage(userId: string, now = Date.now()): WeekPage {
 	const today = isoDateInZone(now, timeZone());
-	const week = currentWeek(userId);
-	const items = shots(userId);
-	const span = calendarSpan(
-		today,
-		items.flatMap((item) => (item.date ? [item.date] : []))
-	);
-	const plan = currentPlan(userId);
+	const start = startOfWeek(today);
+	const end = endOfWeek(today);
+	const items = scheduledItems(userId)
+		.filter((item) => item.date >= start && item.date <= end)
+		.sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order || a.id.localeCompare(b.id))
+		.map(asDay);
 	return {
 		today,
 		dateLabel: formatLong(today),
-		intro: week.intro,
-		days: eachDay(span.start, span.end).map((date) => ({
-			date,
-			label: formatDayNum(date),
-			relation: relation(date, today),
-			items: items.filter((item) => item.date === date)
-		})),
-		undated: items.filter((item) => !item.date),
-		plan: plan ? { done: plan.done, total: plan.total } : null
+		intro: currentWeek(userId).intro,
+		items,
+		done: items.filter((item) => item.done).length,
+		total: items.length
 	};
+}
+
+export function morePage(userId: string): MorePage {
+	const study = currentStudy(userId);
+	return {
+		openTodos: currentTodos(userId).items.filter((item) => !item.done).length,
+		studyCount: study.study.blocks.length + study.reels_rules.blocks.length,
+		briefCount: listBriefs(userId).length,
+		pending: pendingDecisionCount(userId)
+	};
+}
+
+export function planPage(userId: string) {
+	return currentPlan(userId);
 }
