@@ -121,3 +121,108 @@ export function calendarSpan(today: string, shotDates: string[]): { start: strin
 		end: endOfWeek(latest > today ? latest : today)
 	};
 }
+
+export type ScheduleEntry = {
+	id: string;
+	kind: 'todo' | 'week';
+	date: string;
+	done: boolean;
+	order: number;
+};
+
+export type ScheduleMove = {
+	id: string;
+	kind: 'todo' | 'week';
+	from: string;
+	date: string;
+};
+
+/** Effective day the phone shows. The override wins, then the stored plan date, then a date prefix on the id. */
+export function effectiveDate(base: string | null, override: string | null, id: string): string | null {
+	if (override && isIsoDate(override)) return override;
+	if (base && isIsoDate(base)) return base;
+	return dateFromId(id);
+}
+
+/**
+ * Plan date and reschedule override after an ingest.
+ * Omitting `date`, or sending the same plan date again, keeps the override.
+ * A different `date` is a new plan and clears the override.
+ */
+export function keepSchedule(
+	prior: { base: string | null; scheduled: string | null } | null,
+	explicit: string | undefined,
+	id: string
+): { base: string | null; scheduled: string | null } {
+	const derived = dateFromId(id);
+	const previousBase = prior ? (prior.base && isIsoDate(prior.base) ? prior.base : derived) : null;
+	const sent = explicit !== undefined && isIsoDate(explicit) ? explicit : undefined;
+	if (!prior) return { base: sent ?? derived, scheduled: null };
+	if (sent === undefined || sent === previousBase) {
+		return { base: previousBase, scheduled: prior.scheduled };
+	}
+	return { base: sent, scheduled: null };
+}
+
+/**
+ * Slide undone items onto the next free days, starting today, in plan order.
+ * A free day does not already hold a done item dated today or later.
+ * Done items are never returned. A second call on the result is empty.
+ */
+export function reschedulePlan(entries: ScheduleEntry[], today: string): ScheduleMove[] {
+	if (!isIsoDate(today)) return [];
+	const dated = entries.filter((entry) => isIsoDate(entry.date));
+	if (!dated.some((entry) => !entry.done && entry.date < today)) return [];
+
+	const occupied = new Set<string>();
+	for (const entry of dated) {
+		if (entry.done && entry.date >= today) occupied.add(entry.date);
+	}
+
+	const undone = dated
+		.filter((entry) => !entry.done)
+		.sort(
+			(a, b) =>
+				a.date.localeCompare(b.date) || a.order - b.order || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id)
+		);
+
+	const moves: ScheduleMove[] = [];
+	let cursor = today;
+	for (const entry of undone) {
+		let guard = 0;
+		while (occupied.has(cursor)) {
+			cursor = addDays(cursor, 1);
+			if (++guard > 400) return moves;
+		}
+		occupied.add(cursor);
+		if (entry.date !== cursor) moves.push({ id: entry.id, kind: entry.kind, from: entry.date, date: cursor });
+		cursor = addDays(cursor, 1);
+	}
+	return moves;
+}
+
+export type FocusChoice<T> = T & { when: 'today' | 'next' };
+
+/** Today's open item, else today's item, else the next day's open item. Past days are skipped. */
+export function chooseFocus<T extends { id: string; date: string; done: boolean; order: number }>(
+	items: T[],
+	today: string
+): FocusChoice<T> | null {
+	if (!isIsoDate(today)) return null;
+	const dated = items.filter((item) => isIsoDate(item.date));
+	const pick = (rows: T[]): T | null => {
+		if (!rows.length) return null;
+		const open = rows.filter((row) => !row.done);
+		const pool = open.length ? open : rows;
+		return [...pool].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))[0] ?? null;
+	};
+	const todayPick = pick(dated.filter((item) => item.date === today));
+	if (todayPick) return { ...todayPick, when: 'today' };
+	const upcoming = dated
+		.filter((item) => item.date > today)
+		.sort((a, b) => a.date.localeCompare(b.date) || a.order - b.order || a.id.localeCompare(b.id));
+	if (!upcoming.length) return null;
+	const nextDate = upcoming[0].date;
+	const next = pick(upcoming.filter((item) => item.date === nextDate));
+	return next ? { ...next, when: 'next' } : null;
+}

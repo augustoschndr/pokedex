@@ -1,14 +1,33 @@
-/* Same first-paint steps as the inline script in src/app.html. This file is not
-   loaded. The inline copy is what runs, so a network fetch cannot delay the splash. */
+/* Same first-paint steps as the inline script in src/app.html. This file is not loaded. */
 (function () {
-	var choice = 'system';
+	var stored = null;
 	try {
-		var saved = localStorage.getItem('pokedex-theme');
-		if (saved === 'light' || saved === 'dark' || saved === 'system') choice = saved;
+		stored = localStorage.getItem('pokedex-theme');
 	} catch (e) {
-		choice = 'system';
+		stored = null;
 	}
+	var fromCookie = '';
+	var match = document.cookie.match(/(?:^|; )pokedex-theme=([^;]*)/);
+	if (match) {
+		try {
+			fromCookie = decodeURIComponent(match[1]);
+		} catch (e) {
+			fromCookie = '';
+		}
+	}
+	function ok(value) {
+		return value === 'light' || value === 'dark' || value === 'system';
+	}
+	var choice = 'system';
+	if (ok(fromCookie) && fromCookie !== 'system') choice = fromCookie;
+	else if (ok(stored)) choice = stored;
+	else if (ok(fromCookie)) choice = fromCookie;
 	var dark = choice === 'dark' || (choice !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+	try {
+		if (stored !== choice) localStorage.setItem('pokedex-theme', choice);
+	} catch (e) {
+		/* private mode */
+	}
 	var root = document.documentElement;
 	var bg = dark ? '#1C1916' : '#FBF7F3';
 	var ink = dark ? '#F6F1EA' : '#171513';

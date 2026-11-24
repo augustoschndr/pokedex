@@ -1,6 +1,7 @@
 import { applyIngest, allow, markPushed, principalForToken } from '$lib/server/db';
 import { clientKey, json, readBearer } from '$lib/server/http';
 import { pushTarget, pushToUser } from '$lib/server/push';
+import { shiftSchedule } from '$lib/server/schedule';
 import { ingestSchema } from '$lib/server/schema';
 import type { RequestHandler } from './$types';
 
@@ -40,6 +41,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 		);
 	}
 	const briefId = applyIngest(principal.id, parsed.data);
+	shiftSchedule(principal.id, Date.now(), { force: true });
 	const pushed = (await pushToUser(principal.id, pushTarget(parsed.data))).sent;
 	markPushed(principal.id, briefId);
 	console.log(`ingest brief=${briefId} type=${parsed.data.type} pushed=${pushed}`);

@@ -151,6 +151,23 @@
 </script>
 
 <div class="prompter" class:is-mirror={mirror} role="dialog" aria-modal="true" aria-label="Script">
+	<div class="prompter-stage">
+		<div class="prompter-guide" aria-hidden="true"></div>
+		<div class="prompter-scroll" bind:this={scroller}>
+			<div class="prompter-lead"></div>
+			<div class="prompter-pad">
+				<p class="kicker">{title}</p>
+				<p class="prompter-text" style:font-size="{size}px">{text}</p>
+			</div>
+			<div class="prompter-tail"></div>
+		</div>
+		{#if phase === 'count'}
+			<div class="prompter-count" aria-live="polite">
+				{#key count}<b>{count}</b>{/key}
+			</div>
+		{/if}
+	</div>
+
 	<div class="prompter-bar">
 		<div class="prompter-row">
 			<button class="text-btn" type="button" onclick={close}>Close</button>
@@ -197,22 +214,5 @@
 				/>
 			</label>
 		</div>
-	</div>
-
-	<div class="prompter-stage">
-		<div class="prompter-guide" aria-hidden="true"></div>
-		<div class="prompter-scroll" bind:this={scroller}>
-			<div class="prompter-lead"></div>
-			<div class="prompter-pad">
-				<p class="kicker">{title}</p>
-				<p class="prompter-text" style:font-size="{size}px">{text}</p>
-			</div>
-			<div class="prompter-tail"></div>
-		</div>
-		{#if phase === 'count'}
-			<div class="prompter-count" aria-live="polite">
-				{#key count}<b>{count}</b>{/key}
-			</div>
-		{/if}
 	</div>
 </div>

@@ -1,10 +1,15 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import Diagram from '$lib/components/Diagram.svelte';
 	import SettingsLink from '$lib/components/SettingsLink.svelte';
+	import { scriptReader } from '$lib/script-reader';
 
 	let { data } = $props();
 	const screen = $derived(data.screen);
 	const today = $derived(screen?.lesson ?? null);
+	const focus = $derived(screen?.focus ?? null);
+
+	onDestroy(() => scriptReader.set(null));
 </script>
 
 <main>
@@ -13,54 +18,109 @@
 		<SettingsLink />
 	</div>
 
+	{#if focus}
+		{@const item = focus}
+		<p class="kicker">{item.when === 'today' ? 'Today' : `Up next · ${item.dateLabel}`}</p>
+		<h1>{item.title}</h1>
+		<svg class="underline" viewBox="0 0 72 8" aria-hidden="true">
+			<path d="M2 5 C 16 2, 28 7, 40 4 S 60 2, 70 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+		</svg>
+		<div class="chips">
+			{#if item.duration}<span class="chip">{item.duration}</span>{/if}
+			{#if item.meta}<span class="chip">{item.meta}</span>{/if}
+			{#if item.done}<span class="chip">Done</span>{/if}
+		</div>
+		{#if item.summary}<p class="lede">{item.summary}</p>{/if}
+		{#if item.steps.length}
+			<ol class="steps">
+				{#each item.steps as step, index}
+					<li>
+						<span class="step-n" aria-hidden="true">{index + 1}</span>
+						<div class="step-body">
+							<p class="guide-title">{step.title}</p>
+							{#if step.detail}<p class="small" style="margin-top: 4px">{step.detail}</p>{/if}
+						</div>
+					</li>
+				{/each}
+			</ol>
+		{/if}
+		<div class="stack" style="margin-top: 16px">
+			{#if item.script}
+				{@const script = item.script}
+				<button
+					class="pill full focus-go"
+					type="button"
+					onclick={() => scriptReader.set({ title: item.title, text: script })}
+				>
+					Read the script
+				</button>
+				<a class="text-btn" href={item.href} style="text-align: center">All the details</a>
+			{:else}
+				<a class="pill full focus-go" href={item.href}>Open</a>
+			{/if}
+		</div>
+	{/if}
+
 	{#if !screen || screen.mode === 'empty'}
-		<h1>No lesson yet</h1>
-		<p class="lede">The weekday brief shows up here when it is posted.</p>
+		{#if !focus}
+			<h1>No lesson yet</h1>
+			<p class="lede">The weekday brief shows up here when it is posted.</p>
+		{/if}
 	{:else if screen.mode === 'prep'}
-		<h1>Prep day</h1>
-		<p class="lede">Nothing to film today. The next brief is on its way.</p>
+		{#if focus}
+			<h2 style="margin-top: 28px">Prep day</h2>
+		{:else}
+			<h1>Prep day</h1>
+		{/if}
+		{#if focus?.when !== 'today'}
+			<p class="lede">Nothing to film today. The next brief is on its way.</p>
+		{/if}
 		<article class="card" style="margin-top: 16px">
 			<p class="kicker">Next brief</p>
 			<p class="countdown">{screen.countdown}</p>
 			{#if screen.upcomingTitle}<p class="meta" style="margin-top: 6px">{screen.upcomingTitle}</p>{/if}
 		</article>
-		<section class="section" style="margin-top: 22px">
-			<h2>Start now</h2>
-			<div class="stack" style="margin-top: 12px">
-				{#if screen.shots.length}
-					<a class="card prep-link" href="/week">
-						<p class="guide-title">Upcoming shots</p>
-						{#each screen.shots as shot}
-							<p class="small" style="margin-top: 8px"><span class="lead">{shot.lead}</span> {shot.title}</p>
-						{/each}
-					</a>
-				{/if}
-				{#if screen.todoCount}
-					<a class="card prep-link" href="/you">
-						<p class="guide-title">Only you</p>
-						{#each screen.todos as item}
-							<p class="small" style="margin-top: 8px">{item.text}</p>
-						{/each}
-						{#if screen.todoCount > screen.todos.length}
-							<p class="small muted" style="margin-top: 8px">{screen.todoCount - screen.todos.length} more</p>
-						{/if}
-					</a>
-				{/if}
-				{#if screen.studyCount}
-					<a class="card prep-link" href="/study">
-						<p class="guide-title">Study</p>
-						<p class="small" style="margin-top: 8px">
-							{screen.studyHeading ?? 'Notes'} · {screen.studyCount} {screen.studyCount === 1 ? 'note' : 'notes'}
-						</p>
-					</a>
-				{/if}
-			</div>
-		</section>
+		{#if (!focus && screen.shots.length) || screen.todoCount || screen.studyCount}
+			<section class="section">
+				<h2>Start now</h2>
+				<div class="stack" style="margin-top: 12px">
+					{#if !focus && screen.shots.length}
+						<a class="card prep-link" href="/week">
+							<p class="guide-title">Upcoming shots</p>
+							{#each screen.shots as shot}
+								<p class="small" style="margin-top: 8px"><span class="lead">{shot.lead}</span> {shot.title}</p>
+							{/each}
+						</a>
+					{/if}
+					{#if screen.todoCount}
+						<a class="card prep-link" href="/you">
+							<p class="guide-title">Only you</p>
+							{#each screen.todos as item}
+								<p class="small" style="margin-top: 8px">{item.text}</p>
+							{/each}
+							{#if screen.todoCount > screen.todos.length}
+								<p class="small muted" style="margin-top: 8px">{screen.todoCount - screen.todos.length} more</p>
+							{/if}
+						</a>
+					{/if}
+					{#if screen.studyCount}
+						<a class="card prep-link" href="/study">
+							<p class="guide-title">Study</p>
+							<p class="small" style="margin-top: 8px">
+								{screen.studyHeading ?? 'Notes'} · {screen.studyCount} {screen.studyCount === 1 ? 'note' : 'notes'}
+							</p>
+						</a>
+					{/if}
+				</div>
+			</section>
+		{/if}
 	{:else if screen.mode === 'past'}
-		<h1>No brief today</h1>
-		<p class="lede">The last one was {screen.pastLabel}. Nothing new has been posted for today.</p>
+		{#if !focus}
+			<h1>No brief today</h1>
+			<p class="lede">The last one was {screen.pastLabel}. Nothing new has been posted for today.</p>
+		{/if}
 		{#if screen.todoCount || screen.studyCount}
-			<section class="section" style="margin-top: 22px">
+			<section class="section">
 				<h2>Still open</h2>
 				<div class="stack" style="margin-top: 12px">
 					{#if screen.todoCount}
@@ -79,10 +139,14 @@
 			</section>
 		{/if}
 	{:else if today}
-		<h1>{today.lesson ?? 'Today'}</h1>
-		<svg class="underline" viewBox="0 0 72 8" aria-hidden="true">
-			<path d="M2 5 C 16 2, 28 7, 40 4 S 60 2, 70 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-		</svg>
+		{#if focus}
+			<h2 style="margin-top: 28px">{today.lesson ?? 'Today'}</h2>
+		{:else}
+			<h1>{today.lesson ?? 'Today'}</h1>
+			<svg class="underline" viewBox="0 0 72 8" aria-hidden="true">
+				<path d="M2 5 C 16 2, 28 7, 40 4 S 60 2, 70 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+			</svg>
+		{/if}
 		{#if today.pillar || today.where_it_goes}
 			<div class="chips">
 				{#if today.pillar}<span class="chip">{today.pillar}</span>{/if}

@@ -23,7 +23,7 @@ test('only a 2xx counts, and only 404 or 410 drops the row', () => {
 });
 
 test('the service worker always shows a notification and still handles the click', () => {
-	const worker = fs.readFileSync('static/service-worker.js', 'utf8');
+	const worker = fs.readFileSync('src/lib/pwa/service-worker.js', 'utf8');
 	const pushAt = worker.indexOf("addEventListener('push'");
 	const clickAt = worker.indexOf("addEventListener('notificationclick'");
 	assert.ok(pushAt > 0 && clickAt > pushAt);
