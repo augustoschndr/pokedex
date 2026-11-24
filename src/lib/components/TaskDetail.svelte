@@ -11,7 +11,12 @@
 
 	let mainOverride = $state<boolean | null>(null);
 	let checkOverrides = $state<Record<string, boolean>>({});
+	let drafts = $state<Record<number, string>>({});
+	let saved = $state<Record<number, string>>({});
+	let draftKey = $state('');
 	let error = $state('');
+	const noteTimers = new Map<number, ReturnType<typeof setTimeout>>();
+	const noteGen = new Map<number, number>();
 
 	const guide = $derived(task.guide);
 	const script = $derived(guide?.script?.trim() ?? '');
@@ -66,6 +71,53 @@
 		});
 	}
 
+	function savedNote(index: number) {
+		if (index in saved) return saved[index];
+		return task.stepNotes.find((note) => note.index === index)?.text ?? '';
+	}
+
+	function noteValue(index: number) {
+		return index in drafts ? drafts[index] : savedNote(index);
+	}
+
+	function noteChanged(index: number, value: string) {
+		drafts[index] = value;
+		const pending = noteTimers.get(index);
+		if (pending) clearTimeout(pending);
+		noteTimers.set(
+			index,
+			setTimeout(() => {
+				noteTimers.delete(index);
+				void saveNote(index, value);
+			}, 400)
+		);
+	}
+
+	function noteBlur(index: number, value: string) {
+		const pending = noteTimers.get(index);
+		if (pending) clearTimeout(pending);
+		noteTimers.delete(index);
+		void saveNote(index, value);
+	}
+
+	async function saveNote(index: number, value: string) {
+		if (value.trim() === savedNote(index)) return;
+		const gen = (noteGen.get(index) ?? 0) + 1;
+		noteGen.set(index, gen);
+		error = '';
+		const response = await fetch('/api/v1/steps/comment', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ parent_kind: task.kind, parent_id: task.id, index, text: value })
+		});
+		if (noteGen.get(index) !== gen) return;
+		if (!response.ok) {
+			error = 'Could not save that comment';
+			return;
+		}
+		saved[index] = value.trim();
+	}
+
 	function flipStep(id: string, value: boolean) {
 		error = '';
 		checkOverrides[id] = !stepDone(id, value);
@@ -79,7 +131,20 @@
 		});
 	}
 
-	onDestroy(() => scriptReader.set(null));
+	$effect(() => {
+		const key = `${task.kind}:${task.id}`;
+		if (key === draftKey) return;
+		draftKey = key;
+		drafts = {};
+		saved = {};
+		for (const timer of noteTimers.values()) clearTimeout(timer);
+		noteTimers.clear();
+	});
+
+	onDestroy(() => {
+		for (const timer of noteTimers.values()) clearTimeout(timer);
+		scriptReader.set(null);
+	});
 </script>
 
 <main>
@@ -153,9 +218,21 @@
 				{#each guide.steps as step, index}
 					<li>
 						<span class="step-n" aria-hidden="true">{index + 1}</span>
-						<div>
+						<div class="step-body">
 							<p class="guide-title">{step.title}</p>
 							{#if step.detail}<p class="small" style="margin-top: 4px">{step.detail}</p>{/if}
+							<input
+								class="field step-note"
+								type="text"
+								maxlength="2000"
+								autocomplete="off"
+								enterkeyhint="done"
+								placeholder="Comment"
+								aria-label={`Comment on ${step.title}`}
+								value={noteValue(index)}
+								oninput={(event) => noteChanged(index, event.currentTarget.value)}
+								onblur={(event) => noteBlur(index, event.currentTarget.value)}
+							/>
 						</div>
 					</li>
 				{/each}

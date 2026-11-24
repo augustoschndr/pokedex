@@ -41,8 +41,8 @@ The app does not run that clock. BALTHA does, and posts the result. Each success
 Omitted sections are left as they are. Sending a section replaces that section.
 
 - `today` inserts a new current lesson and keeps the previous one as history.
-- `week.items` replaces the current shot list. An empty array clears it. `week.intro` replaces the intro. An id that comes back keeps its done tick. An included `guide` replaces that item's guide. Omitting `guide` leaves the previous one.
-- `todos.items` upserts by `id`. Text, meta, and an included `guide` update. `done` is kept unless `force_status: true` is sent with a boolean `done`. An item included in the list is active again. `archived: true` hides one item. An empty `items` array archives every current to-do. Omitting `guide` leaves the previous guide and its checklist ticks.
+- `week.items` replaces the current shot list. An empty array clears it. `week.intro` replaces the intro. An id that comes back keeps its done tick and, unless you send a new `date`, its reschedule override. An included `guide` replaces that item's guide. Omitting `guide` leaves the previous one. Step comments are not part of `guide` and are left in place.
+- `todos.items` upserts by `id`. Text, meta, and an included `guide` update. `done` is kept unless `force_status: true` is sent with a boolean `done`. An omitted `date` keeps the plan date and any reschedule override. An item included in the list is active again. `archived: true` hides one item. An empty `items` array archives every current to-do. Omitting `guide` leaves the previous guide, its checklist ticks, and step comments.
 - `guide.checklist` upserts by `id` under that task. Text updates. The tick is kept unless that checklist item sends `force_status: true` with a boolean `done`. An id left out of the array is archived. An empty array archives every sub-step. Omitting `checklist` leaves the current sub-steps.
 - `plan` replaces the whole plan. Phases and milestones upsert by id inside that replacement, so posting the same plan twice does not duplicate rows. Omitting `plan` leaves the current plan. An empty `phases` array clears it. Phase and milestone ids must be unique across the plan, because `guide.plan_ref` may point at either.
 - `study` replaces only the study blocks. `reels_rules` replaces only the Reels rules blocks. They do not clear each other. An empty `blocks` array clears that group.
@@ -117,7 +117,26 @@ Ids are strings of letters, numbers, and `.` `_` `:` `-`, up to 200 characters.
 
 `timezone` defaults to `America/Sao_Paulo`. `type` is `daily`, `weekly`, or `ad_hoc`. `for_date` is `YYYY-MM-DD` when present. Status `tone` is `default`, `warning`, `success`, or `info`.
 
-The phone does not treat `date_label` as the current day. It uses the real date in the server timezone. When `for_date` is still in the future, Today is a prep day and counts down to that date. Week rows are grouped by the `YYYY-MM-DD` prefix on each item id. Days with no item stay empty.
+The phone does not treat `date_label` as the current day. It uses the real date in the server timezone. When `for_date` is still in the future, Today is a prep day and counts down to that date. A week shot's plan date is its `date` field when you send one, otherwise the `YYYY-MM-DD` prefix on its id. After a lost day the phone may show a later day. See [Dates and lost days](#dates-and-lost-days). Days with no item stay empty.
+
+## Dates and lost days
+
+Home opens on the item scheduled for today: a dated to-do or a week shot, with its guide. One tap opens that item's script. If nothing is scheduled today, Home shows the next upcoming item.
+
+If a dated to-do or a week shot is still not done when that day ends in America/Sao_Paulo, the phone slides the remaining undone items onto the next free days, in order, starting today. A free day does not already hold a done item. Done items stay on their dates. `done` and `done_at` are never changed by the slide, and nothing is dropped. The new day is stored per item as an override. The slide runs once per calendar day, and again after an ingest so a newly posted overdue plan still slides. Running it twice does not slide a second time.
+
+### Posting without undoing a slide
+
+Omit `date` on routine posts. That is the safe choice. The plan date and the override both stay, for week shots and for to-dos.
+
+- Week shots still take their plan date from the id prefix when `date` is omitted (`2026-11-23-origin` is 23 Nov 2026). Re-post the same ids. `week.items` replaces the list, so an id you leave out drops off the current list.
+- A to-do is on the calendar when you send `date`, or when its id has the same `YYYY-MM-DD` prefix. Omit `date` on later posts. A to-do you leave out of `items` stays as it is. It is not removed.
+- Sending `date` equal to the plan date already stored keeps the override. Sending a different `date` is a new plan for that one item: the override is cleared and that date becomes the plan date. Do that only when you mean to place the item on a new day.
+- Do not send `null`, and do not change an id to move a day. A new id is a new item. Its tick and override are not copied.
+- Do not send `done` unless you also send `force_status: true` and you mean to set the tick. A slide never resets a tick, and a later post must not either. Omit `done` and `force_status`.
+- Omit `guide` to leave the guide, checklist ticks, and step comments. Comments are stored by step index (`0` is the first step), not inside the guide JSON.
+
+`GET /api/v1/todos` without `since` is how you read the day the phone is using. `date` on a to-do or week row is that day, or `null` when the item is not scheduled. A slide does not change `done_at`, so a `since` poll will not report it.
 
 `guide` is optional on a to-do or a week item. The phone renders only the fields you send.
 
@@ -200,7 +219,25 @@ Authorization: Bearer <INGEST_TOKEN>
       "parent_kind": null,
       "kind": "todo",
       "done": true,
-      "done_at": "2026-11-20T10:15:00-03:00"
+      "done_at": "2026-11-20T10:15:00-03:00",
+      "date": null,
+      "steps": [
+        {
+          "index": 1,
+          "comment": "Proxy was still on.",
+          "updated_at": "2026-11-20T10:16:00-03:00"
+        }
+      ]
+    },
+    {
+      "id": "2026-11-23-origin",
+      "parent_id": null,
+      "parent_kind": null,
+      "kind": "week",
+      "done": false,
+      "done_at": null,
+      "date": "2026-11-24",
+      "steps": []
     },
     {
       "id": "record",
@@ -215,6 +252,18 @@ Authorization: Bearer <INGEST_TOKEN>
 ```
 
 `kind` is `todo`, `week`, or `checklist`. `parent_id` and `parent_kind` are set for checklist rows and null otherwise. `parent_kind` is `todo` or `week`. `done_at` is an ISO-8601 timestamp in the server zone when the row is done, and null when it is not. Ticking sets it. Unticking clears it. A bad `since` is `400` with `invalid_since`. The token needs the `todos:read` scope, which the primary ingest token has.
+
+To-do and week rows always include `date` and `steps`. Checklist rows do not.
+
+| Field | Meaning |
+| --- | --- |
+| `date` | The day the phone is using, `YYYY-MM-DD`, after any slide. `null` when the item is not on the calendar. |
+| `steps` | Comments Augusto typed on guide steps. Empty when he has not written one. |
+| `steps[].index` | Zero-based index into that item's `guide.steps`. |
+| `steps[].comment` | The comment text. |
+| `steps[].updated_at` | When he last saved it, ISO-8601 in the server zone. |
+
+A `since` that falls before a comment's `updated_at` includes that parent even if the tick did not change, with the current `done` and the current `steps`. Clearing a comment removes that step from the array.
 
 If `DECISIONS_WEBHOOK_URL` is set, each answer is also POSTed as that same object (not wrapped in `answers`). Header:
 

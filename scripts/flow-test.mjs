@@ -29,6 +29,14 @@ function check(cond, message) {
 	}
 }
 
+function addIso(iso, days) {
+	const [y, m, d] = iso.split('-').map(Number);
+	const date = new Date(Date.UTC(y, m - 1, d + days));
+	const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+	const dd = String(date.getUTCDate()).padStart(2, '0');
+	return `${date.getUTCFullYear()}-${mm}-${dd}`;
+}
+
 function seal(id) {
 	const sig = crypto.createHmac('sha256', sessionSecret).update(id).digest('base64url');
 	return `${id}.${sig}`;
@@ -413,6 +421,148 @@ try {
 	check(weekOnly.status === 200, 'weekly kind');
 	const week2 = await api('/api/v1/week', { cookie });
 	check(week2.json.items.length === 1 && week2.json.intro === 'Friday plan', 'week replaced');
+
+	const lostA = addIso(zoneToday, -2);
+	const lostB = addIso(zoneToday, -1);
+	const later = addIso(zoneToday, 1);
+	const idA = `${addIso(zoneToday, 10)}-a`;
+	const idB = `${addIso(zoneToday, 11)}-b`;
+	const idC = `${addIso(zoneToday, 12)}-c`;
+	const idTask = `${addIso(zoneToday, 10)}-task`;
+	const doneAt = '2001-02-02T00:00:00.000Z';
+	const holdAt = '2001-03-03T00:00:00.000Z';
+	const slidePlan = {
+		id: 'brief-slide',
+		type: 'weekly',
+		week: {
+			items: [
+				{
+					id: idA,
+					title: 'Keep the day',
+					guide: { summary: 'One take after a lost day.', script: 'Say the line.', steps: [{ title: 'Stand here' }] }
+				},
+				{ id: idB, title: 'Already done' },
+				{ id: idC, title: 'After that' }
+			]
+		},
+		todos: {
+			items: [
+				{ id: idTask, text: 'Call them' },
+				{ id: 'hold-tick', text: 'Leave this tick' }
+			]
+		}
+	};
+	{
+		// These posts sit on top of the 10-call ingest budget. Clear it so the
+		// later posts, and the 429 check at the end, still run.
+		const scheduleDb = new Database(dbPath);
+		scheduleDb.prepare(`DELETE FROM rate_limit WHERE bucket LIKE 'ingest:%'`).run();
+		scheduleDb.close();
+	}
+	const slidePost = await api('/api/v1/ingest', { method: 'POST', bearer: token, body: slidePlan });
+	check(slidePost.status === 200, `future plan ingest (${slidePost.status})`);
+	{
+		const scheduleDb = new Database(dbPath);
+		scheduleDb.prepare('UPDATE week_item SET base_date = ?, scheduled_on = NULL WHERE ingest_id = ? AND is_current = 1').run(lostA, idA);
+		scheduleDb.prepare('UPDATE week_item SET base_date = ?, scheduled_on = NULL, done = 1, done_at = ? WHERE ingest_id = ? AND is_current = 1').run(lostB, doneAt, idB);
+		scheduleDb.prepare('UPDATE week_item SET base_date = ?, scheduled_on = NULL WHERE ingest_id = ? AND is_current = 1').run(later, idC);
+		scheduleDb.prepare('UPDATE todo SET base_date = ?, scheduled_on = NULL WHERE id = ?').run(lostA, idTask);
+		scheduleDb.prepare('UPDATE todo SET done = 1, done_at = ? WHERE id = ?').run(holdAt, 'hold-tick');
+		scheduleDb.close();
+	}
+	const slideAgain = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: {
+			id: 'brief-slide-2',
+			type: 'weekly',
+			week: {
+				items: [
+					{ id: idA, title: 'Keep the day' },
+					{ id: idB, title: 'Already done' },
+					{ id: idC, title: 'After that' }
+				]
+			},
+			todos: {
+				items: [
+					{ id: idTask, text: 'Call them' },
+					{ id: 'hold-tick', text: 'Leave this tick', done: false }
+				]
+			}
+		}
+	});
+	check(slideAgain.status === 200, `reingest after a lost day (${slideAgain.status} ${typeof slideAgain.text === 'string' ? slideAgain.text.slice(0, 180) : ''})`);
+	const readSchedule = () => {
+		const scheduleDb = new Database(dbPath);
+		const week = scheduleDb.prepare('SELECT ingest_id, base_date, scheduled_on, done, done_at, guide_json FROM week_item WHERE is_current = 1').all();
+		const todos = scheduleDb.prepare('SELECT id, base_date, scheduled_on, done, done_at FROM todo WHERE id IN (?, ?)').all(idTask, 'hold-tick');
+		scheduleDb.close();
+		return { week, todos };
+	};
+	const slid = readSchedule();
+	const shotOf = (rows, id) => rows.find((row) => row.ingest_id === id);
+	const todoOf = (rows, id) => rows.find((row) => row.id === id);
+	const shown = (row) => row.scheduled_on || row.base_date;
+	check(shown(shotOf(slid.week, idA)) === zoneToday, 'lost shot moves to today');
+	check(shown(shotOf(slid.week, idB)) === lostB && shotOf(slid.week, idB).done === 1 && shotOf(slid.week, idB).done_at === doneAt, 'done shot stays put');
+	check(shown(shotOf(slid.week, idC)) === addIso(zoneToday, 2), 'later shot follows in order');
+	check(shown(todoOf(slid.todos, idTask)) === addIso(zoneToday, 1), 'lost task takes the next free day');
+	check(todoOf(slid.todos, 'hold-tick').done === 1 && todoOf(slid.todos, 'hold-tick').done_at === holdAt, 'ingest does not reset a done tick');
+	check(String(shotOf(slid.week, idA).guide_json).includes('Say the line.'), 'omitted guide survives the reingest');
+	check(slid.week.length === 3, 'nothing dropped from the shot list');
+
+	const home = await api('/today', { cookie });
+	check(home.status === 200 && home.text.includes('Keep the day') && home.text.includes('Stand here'), 'home leads with today and the guide');
+	check(home.text.includes('Read the script'), 'home opens the script');
+	const noted = await api('/api/v1/steps/comment', {
+		method: 'POST',
+		cookie,
+		body: { parent_kind: 'week', parent_id: idA, index: 0, text: 'Light was flat' }
+	});
+	check(noted.status === 200 && noted.json.step?.comment === 'Light was flat', 'step comment saved');
+	const withNotes = await api('/api/v1/todos', { bearer: token });
+	const notedShot = withNotes.json.items.find((item) => item.kind === 'week' && item.id === idA);
+	check(
+		notedShot?.steps?.[0]?.index === 0 &&
+			notedShot.steps[0].comment === 'Light was flat' &&
+			typeof notedShot.steps[0].updated_at === 'string',
+		'todos readback includes the step comment'
+	);
+	check(notedShot?.date === zoneToday, 'todos readback includes the scheduled date');
+
+	const slideKept = await api('/api/v1/ingest', {
+		method: 'POST',
+		bearer: token,
+		body: {
+			id: 'brief-slide-3',
+			type: 'weekly',
+			week: {
+				items: [
+					{ id: idA, title: 'Keep the day', date: addIso(zoneToday, 40) },
+					{ id: idB, title: 'Already done' },
+					{ id: idC, title: 'After that' }
+				]
+			},
+			todos: {
+				items: [
+					{ id: idTask, text: 'Call them', date: lostA },
+					{ id: 'hold-tick', text: 'Leave this tick' }
+				]
+			}
+		}
+	});
+	check(
+		slideKept.status === 200,
+		`explicit date ingest (${slideKept.status} ${typeof slideKept.text === 'string' ? slideKept.text.slice(0, 180) : ''})`
+	);
+	const afterDate = readSchedule();
+	const movedA = shotOf(afterDate.week, idA);
+	check(movedA.base_date === addIso(zoneToday, 40) && movedA.scheduled_on === null, 'a new date clears the override');
+	check(shotOf(afterDate.week, idB).done === 1 && shotOf(afterDate.week, idB).done_at === doneAt, 'done tick still untouched');
+	check(shown(shotOf(afterDate.week, idC)) === addIso(zoneToday, 2), 'omitted date keeps the slid day');
+	check(shown(todoOf(afterDate.todos, idTask)) === addIso(zoneToday, 1), 'repeating the plan date keeps the override');
+	check(todoOf(afterDate.todos, 'hold-tick').done_at === holdAt, 'hold tick still untouched');
+
 	const studyStill = await api('/api/v1/study', { cookie });
 	check(studyStill.json.reels_rules.blocks.length === 2, 'weekly post left reels rules');
 

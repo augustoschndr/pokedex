@@ -11,6 +11,7 @@ import {
 } from './crypto';
 import { assertEnv, databasePath, displayName } from './env';
 import { nowIso, nowMs } from './time';
+import { keepSchedule } from '$lib/schedule';
 import { ingestSchema, type IngestPayload } from './schema';
 import sampleBrief from '../../../docs/example-payload.json';
 
@@ -147,6 +148,8 @@ CREATE TABLE IF NOT EXISTS week_item (
   done INTEGER NOT NULL DEFAULT 0,
   done_at TEXT,
   status_epoch INTEGER,
+  base_date TEXT,
+  scheduled_on TEXT,
   updated_at TEXT NOT NULL
 );
 
@@ -161,6 +164,8 @@ CREATE TABLE IF NOT EXISTS todo (
   done_at TEXT,
   status_epoch INTEGER,
   guide_json TEXT,
+  base_date TEXT,
+  scheduled_on TEXT,
   archived INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, id)
@@ -253,6 +258,16 @@ CREATE INDEX IF NOT EXISTS idx_study_current ON study_block(user_id, grp, is_cur
 CREATE INDEX IF NOT EXISTS idx_decision_answered ON decision(user_id, answered_epoch);
 CREATE INDEX IF NOT EXISTS idx_todo_user ON todo(user_id, archived, sort_order);
 CREATE INDEX IF NOT EXISTS idx_checklist_parent ON checklist(user_id, parent_kind, parent_id, archived);
+CREATE TABLE IF NOT EXISTS step_comment (
+  user_id TEXT NOT NULL REFERENCES user(id),
+  parent_kind TEXT NOT NULL,
+  parent_id TEXT NOT NULL,
+  step_index INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, parent_kind, parent_id, step_index)
+);
+
 CREATE INDEX IF NOT EXISTS idx_plan_phase ON plan_phase(user_id, sort_order);
 `;
 
@@ -282,6 +297,10 @@ export function db(): Database.Database {
 		ensureColumn(database, 'week_item', 'done', 'done INTEGER NOT NULL DEFAULT 0');
 		ensureColumn(database, 'week_item', 'done_at', 'done_at TEXT');
 		ensureColumn(database, 'week_item', 'status_epoch', 'status_epoch INTEGER');
+		ensureColumn(database, 'week_item', 'base_date', 'base_date TEXT');
+		ensureColumn(database, 'week_item', 'scheduled_on', 'scheduled_on TEXT');
+		ensureColumn(database, 'todo', 'base_date', 'base_date TEXT');
+		ensureColumn(database, 'todo', 'scheduled_on', 'scheduled_on TEXT');
 	}
 	return database;
 }
@@ -539,7 +558,7 @@ export function applyIngest(userId: string, payload: IngestPayload): string {
 			setMeta(userId, 'week_intro', payload.week.intro ?? '', payload.id);
 			const previous = db()
 				.prepare(
-					`SELECT ingest_id, done, done_at, status_epoch, guide_json
+					`SELECT ingest_id, done, done_at, status_epoch, guide_json, base_date, scheduled_on
            FROM week_item WHERE user_id = ? AND is_current = 1`
 				)
 				.all(userId) as {
@@ -548,18 +567,25 @@ export function applyIngest(userId: string, payload: IngestPayload): string {
 				done_at: string | null;
 				status_epoch: number | null;
 				guide_json: string | null;
+				base_date: string | null;
+				scheduled_on: string | null;
 			}[];
 			const previousById = new Map(previous.map((row) => [row.ingest_id, row]));
 			db().prepare('UPDATE week_item SET is_current = 0 WHERE user_id = ? AND is_current = 1').run(userId);
 			const insert = db().prepare(
 				`INSERT INTO week_item (
           id, user_id, ingest_id, brief_id, is_current, sort_order, lead, title, detail, meta,
-          status_label, status_tone, guide_json, done, done_at, status_epoch, updated_at
-        ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          status_label, status_tone, guide_json, done, done_at, status_epoch, base_date, scheduled_on, updated_at
+        ) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 			);
 			payload.week.items.forEach((item, index) => {
 				const prior = previousById.get(item.id);
 				const kept = keptTick(prior, undefined, now, epoch);
+				const dates = keepSchedule(
+					prior ? { base: prior.base_date, scheduled: prior.scheduled_on } : null,
+					item.date,
+					item.id
+				);
 				insert.run(
 					randomId(),
 					userId,
@@ -576,6 +602,8 @@ export function applyIngest(userId: string, payload: IngestPayload): string {
 					kept.done,
 					kept.doneAt,
 					kept.statusEpoch,
+					dates.base,
+					dates.scheduled,
 					now
 				);
 				if (item.guide && item.guide.checklist) {
@@ -599,12 +627,13 @@ export function applyIngest(userId: string, payload: IngestPayload): string {
 					.run(now, userId);
 			} else {
 				const select = db().prepare(
-					'SELECT done, done_at, status_epoch, guide_json FROM todo WHERE user_id = ? AND id = ?'
+					'SELECT done, done_at, status_epoch, guide_json, base_date, scheduled_on FROM todo WHERE user_id = ? AND id = ?'
 				);
 				const upsert = db().prepare(
 					`INSERT INTO todo (
-            user_id, id, brief_id, sort_order, text, meta, done, done_at, status_epoch, guide_json, archived, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            user_id, id, brief_id, sort_order, text, meta, done, done_at, status_epoch, guide_json,
+            base_date, scheduled_on, archived, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(user_id, id) DO UPDATE SET
              brief_id = excluded.brief_id,
              sort_order = excluded.sort_order,
@@ -614,14 +643,28 @@ export function applyIngest(userId: string, payload: IngestPayload): string {
              done_at = excluded.done_at,
              status_epoch = excluded.status_epoch,
              guide_json = excluded.guide_json,
+             base_date = excluded.base_date,
+             scheduled_on = excluded.scheduled_on,
              archived = excluded.archived,
              updated_at = excluded.updated_at`
 				);
 				payload.todos.items.forEach((item, index) => {
 					const existing = select.get(userId, item.id) as
-						| { done: number; done_at: string | null; status_epoch: number | null; guide_json: string | null }
+						| {
+								done: number;
+								done_at: string | null;
+								status_epoch: number | null;
+								guide_json: string | null;
+								base_date: string | null;
+								scheduled_on: string | null;
+						  }
 						| undefined;
 					const kept = keptTick(existing, item, now, epoch);
+					const dates = keepSchedule(
+						existing ? { base: existing.base_date, scheduled: existing.scheduled_on } : null,
+						item.date,
+						item.id
+					);
 					const archived = item.archived === true ? 1 : 0;
 					upsert.run(
 						userId,
@@ -634,6 +677,8 @@ export function applyIngest(userId: string, payload: IngestPayload): string {
 						kept.doneAt,
 						kept.statusEpoch,
 						item.guide ? JSON.stringify(item.guide) : (existing?.guide_json ?? null),
+						dates.base,
+						dates.scheduled,
 						archived,
 						now
 					);

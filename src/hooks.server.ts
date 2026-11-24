@@ -2,6 +2,7 @@ import { redirect, type Handle } from '@sveltejs/kit';
 import { isPublicIconPath } from '$lib/icons';
 import { credentialCount, readSession } from '$lib/server/auth';
 import { boot } from '$lib/server/db';
+import { shiftSchedule } from '$lib/server/schedule';
 
 const PUBLIC_PAGES = new Set(['/login', '/setup', '/manifest.webmanifest']);
 
@@ -41,6 +42,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 			throw redirect(303, '/today');
 		}
 	}
+
+	if (event.locals.user?.onboardingDone) shiftSchedule(event.locals.user.id);
 
 	const response = await resolve(event);
 	response.headers.set('x-content-type-options', 'nosniff');

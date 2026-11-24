@@ -309,6 +309,7 @@ html:has(.app-shell) body {
 }
 .pill.secondary { background: transparent; color: var(--ink); border-color: var(--line); box-shadow: var(--highlight); }
 .pill.full { width: 100%; }
+.pill.focus-go { min-height: 52px; font-size: 17px; }
 .pill:disabled { opacity: 0.38; }
 .text-btn {
 	background: none;
@@ -331,6 +332,7 @@ html:has(.app-shell) body {
 	font-size: 16px;
 }
 textarea.field { min-height: 96px; resize: vertical; }
+input.step-note { min-height: 40px; margin-top: 8px; padding: 8px 12px; font-size: 16px; }
 
 .points { margin: 8px 0 0; padding-left: 18px; }
 .points li { margin: 8px 0; padding-left: 4px; }
@@ -404,6 +406,7 @@ textarea.field { min-height: 96px; resize: vertical; }
 
 .steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 .steps li { display: flex; gap: 10px; align-items: flex-start; }
+.step-body { flex: 1; min-width: 0; }
 .step-n {
 	width: 28px;
 	height: 28px;
